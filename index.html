@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quaver</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link id="fontcss" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,500;0,6..72,700;1,6..72,400;1,6..72,700&family=Noto+Music&display=swap">
+<style>
+:root {
+  --bg: #e8eaf0; --panel: #f7f8fb; --line: #d2d6e2; --ink: #1b2135; --muted: #5b6480;
+  --accent: #3347d6; --accent-ink: #ffffff; --accent-soft: #dde2fb; --danger: #b3261e; --rec: #d62f3a; --rec-ink: #ffffff; --good: #2b8a3e;
+  --shadow: 0 1px 2px rgba(20,28,60,.08), 0 8px 28px rgba(20,28,60,.10);
+  --ui: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --serif: "Newsreader", Georgia, "Times New Roman", serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e111a; --panel: #181c29; --line: #2a3042; --ink: #e7eaf5; --muted: #9aa3bf;
+    --accent: #8b9bff; --accent-ink: #0e111a; --accent-soft: #283058; --danger: #ff8a80; --rec: #ff5c66; --rec-ink: #0e111a; --good: #69db7c;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 28px rgba(0,0,0,.45); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e111a; --panel: #181c29; --line: #2a3042; --ink: #e7eaf5; --muted: #9aa3bf;
+  --accent: #8b9bff; --accent-ink: #0e111a; --accent-soft: #283058; --danger: #ff8a80; --rec: #ff5c66; --rec-ink: #0e111a; --good: #69db7c;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 28px rgba(0,0,0,.45); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--ink); font: 14px/1.45 var(--ui);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 14px 40px;
+}
+.wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+button, select, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[hidden] { display: none !important; }
+
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.brand { font: italic 500 28px/1 var(--serif); letter-spacing: -.01em; display: flex; align-items: center; gap: 10px; }
+.brand svg { width: 26px; height: 26px; color: var(--accent); }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.btn {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 11px;
+  display: inline-flex; align-items: center; gap: 6px; font-weight: 500; line-height: 1.2; white-space: nowrap;
+}
+.btn:hover:not(:disabled) { border-color: var(--accent); }
+.btn:disabled { opacity: .4; cursor: default; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.danger { color: var(--danger); }
+.btn.rec { border-color: var(--rec); color: var(--rec); }
+.btn.rec.on { background: var(--rec); color: #fff; }
+.btn.compose { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.btn.compose:hover { background: var(--accent-soft); }
+.btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+.btn.sm { padding: 5px 9px; font-size: 13px; }
+.btn.ok { background: color-mix(in srgb, var(--good) 22%, transparent); border-color: var(--good); }
+.btn.bad { background: color-mix(in srgb, var(--danger) 18%, transparent); border-color: var(--danger); }
+.btn svg { width: 16px; height: 16px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: currentColor; display: inline-block; }
+
+details.menu { position: relative; }
+details.menu > summary { list-style: none; }
+details.menu > summary::-webkit-details-marker { display: none; }
+.menu-list {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; min-width: 260px; max-height: 70vh; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 6px; box-shadow: var(--shadow); display: flex; flex-direction: column;
+}
+.menu-list.left { left: 0; right: auto; }
+.menu-list button { background: none; border: 0; text-align: left; padding: 8px 10px; border-radius: 6px; display: flex; flex-direction: column; }
+.menu-list button:hover { background: var(--accent-soft); }
+.menu-list small { color: var(--muted); font-size: 12px; }
+.menu-list label { display: flex; gap: 8px; align-items: flex-start; padding: 7px 8px; border-radius: 6px; cursor: pointer; }
+.menu-list label:hover { background: var(--accent-soft); }
+.menu-list label span { display: flex; flex-direction: column; }
+
+.tools, .partsbar, .panel, .selpanel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.tools { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: flex-end; }
+.group { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.group > .lbl { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.row { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.tool {
+  min-width: 46px; height: 52px; padding: 4px 6px; background: transparent; border: 1px solid var(--line); border-radius: 8px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; font-size: 11px; color: var(--muted);
+}
+.tool svg { width: 22px; height: 28px; color: var(--ink); overflow: visible; }
+.tool:hover { border-color: var(--accent); }
+.tool[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); box-shadow: inset 0 0 0 1px var(--accent); }
+.tool.small { height: 44px; min-width: 42px; }
+.tool.mini { height: 34px; min-width: 38px; padding: 2px 6px; }
+.tool.mini svg { width: 22px; height: 18px; }
+.tool .dyn { font: italic 700 17px/1 var(--serif); color: var(--ink); }
+.tool .big { font: italic 700 17px/1 var(--serif); color: var(--ink); }
+select, input[type=number], input[type=text], input[type=password], textarea { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; max-width: 100%; }
+select, input[type=number] { height: 38px; }
+input[type=number] { width: 76px; }
+.tempo { display: flex; align-items: center; gap: 6px; }
+.tempo span { font-family: "Noto Music", var(--ui); font-size: 18px; }
+
+.selpanel { display: flex; flex-direction: column; gap: 8px; }
+.selrow { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.selrow .txt { color: var(--muted); font-size: 13px; flex: 1 1 260px; min-width: 0; }
+.selrow .txt b { color: var(--ink); font-weight: 600; }
+.inl { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.inl input[type=text] { width: 120px; height: 34px; }
+.inl select, .inl input[type=number] { height: 34px; }
+.bartools { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.bartools b { font-size: 13px; margin-right: 4px; }
+.sep { width: 1px; align-self: stretch; background: var(--line); }
+
+.partsbar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; justify-content: space-between; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.tab { background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 5px 13px; font-weight: 500; }
+.tab:hover { border-color: var(--accent); }
+.tab[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.tab.active-part:not([aria-selected="true"]) { box-shadow: inset 0 0 0 1px var(--accent); }
+.partctl { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.partctl input[type=text] { height: 36px; width: 140px; }
+.partctl select { height: 36px; }
+.partctl input[type=range] { width: 84px; accent-color: var(--accent); }
+.addsel { height: 32px; border-radius: 999px; padding: 0 10px; }
+
+.panel h3 { margin: 0 0 6px; font-size: 15px; }
+.panel p { margin: 4px 0; color: var(--muted); }
+.microw { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.microw label { display: flex; align-items: center; gap: 6px; }
+.meter { min-width: 200px; flex: 1; display: flex; align-items: center; gap: 14px; }
+.livenote { font: italic 600 30px/1 var(--serif); min-width: 70px; }
+.cents { position: relative; flex: 1; height: 8px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; }
+.cents i { position: absolute; top: -4px; width: 4px; height: 14px; background: var(--accent); border-radius: 2px; left: 50%; transform: translateX(-50%); transition: left .05s; }
+.cents::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--muted); opacity: .6; }
+.earchoices { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.earscore { font-weight: 600; }
+
+.paper { background: #fdfdfb; color: #17171d; border-radius: 6px; box-shadow: var(--shadow); padding: 26px 20px 30px; min-width: 0; }
+.head { display: flex; flex-direction: column; gap: 2px; padding-bottom: 6px; }
+.head input { border: 0; border-bottom: 1px dashed transparent; background: transparent; color: inherit; padding: 2px 4px; width: 100%; border-radius: 0; }
+.head input:hover { border-bottom-color: #bcbcc6; }
+.head input:focus { outline: none; border-bottom: 1px solid #2f54eb; }
+#title { font: 500 36px/1.15 var(--serif); text-align: center; letter-spacing: -.01em; }
+#composer { font: italic 400 17px/1.3 var(--serif); text-align: right; color: #44444f; }
+.tempoline { font: 15px/1 var(--serif); display: flex; justify-content: space-between; color: #33333d; padding: 0 4px; gap: 12px; }
+.tempoline .n { font-family: "Noto Music", var(--serif); font-size: 18px; margin-right: 2px; }
+.tempoline em { font-size: 17px; }
+#sheet { width: 100%; min-width: 0; cursor: crosshair; }
+#score { display: block; touch-action: manipulation; -webkit-user-select: none; user-select: none; max-width: 100%; height: auto; }
+#score .nt.sel [stroke]:not([stroke="none"]) { stroke: #2f54eb; }
+#score .nt.sel [fill]:not([fill="none"]) { fill: #2f54eb; }
+#score .nt.ok [stroke]:not([stroke="none"]) { stroke: #2b8a3e; }
+#score .nt.ok [fill]:not([fill="none"]) { fill: #2b8a3e; }
+#score .nt.bad [stroke]:not([stroke="none"]) { stroke: #e03131; }
+#score .nt.bad [fill]:not([fill="none"]) { fill: #e03131; }
+#score .nt.pl [stroke]:not([stroke="none"]) { stroke: #d9480f; }
+#score .nt.pl [fill]:not([fill="none"]) { fill: #d9480f; }
+#score rect[fill="#fdfdfb"] { stroke: none; }
+.help { color: var(--muted); font-size: 13px; }
+.help summary { cursor: pointer; font-weight: 600; color: var(--ink); }
+.help dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 10px 0 0; }
+.help dt { font-weight: 600; color: var(--ink); }
+.help dd { margin: 0; }
+kbd { font: 600 12px var(--ui); background: var(--panel); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 0 5px; }
+.toast { position: fixed; left: 50%; bottom: max(18px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 9px 14px; border-radius: 8px; font-weight: 500; z-index: 80; max-width: 90vw; opacity: 0; pointer-events: none; transition: opacity .2s; }
+.toast.show { opacity: 1; }
+body.isplaying { padding-bottom: 110px; }
+body.isplaying .toast { bottom: calc(max(16px, env(safe-area-inset-bottom, 0px)) + 72px); }
+
+/* the Stop bar that floats at the bottom of the screen while music plays */
+.playbar { position: fixed; left: 50%; bottom: max(16px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 75; display: flex; align-items: center; gap: 14px; padding: 8px 18px 8px 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; box-shadow: var(--shadow); max-width: calc(100vw - 32px); overflow: hidden; }
+.pbstop { display: inline-flex; align-items: center; gap: 8px; background: var(--rec); color: var(--rec-ink); border: 0; border-radius: 999px; padding: 10px 20px 10px 15px; font-weight: 600; font-size: 16px; line-height: 1; }
+.pbstop svg { width: 18px; height: 18px; }
+.pbstop:hover { filter: brightness(1.08); }
+.pbstop:focus-visible { outline-offset: 3px; }
+.pbinfo { display: flex; flex-direction: column; gap: 2px; line-height: 1.2; min-width: 0; }
+.pbinfo b { font-weight: 600; white-space: nowrap; }
+.pbinfo span { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pbkeys { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+.pbprog { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; }
+.pbprog i { display: block; height: 100%; width: 0; background: var(--accent); }
+@media (max-width: 520px) { .pbkeys { display: none; } }
+
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100vw); z-index: 60; background: var(--panel); border-left: 1px solid var(--line); box-shadow: var(--shadow); display: flex; flex-direction: column; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.drawer header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--line); gap: 8px; }
+.drawer header b { font: italic 500 22px var(--serif); }
+.drawer .cfg { padding: 10px 14px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+.drawer .cfg label { display: flex; align-items: center; gap: 6px; }
+.drawer .cfg input[type=password] { flex: 1; min-width: 0; height: 34px; }
+.drawer .cfg small { color: var(--muted); }
+.chat { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.msg { padding: 9px 12px; border-radius: 10px; white-space: pre-wrap; overflow-wrap: anywhere; max-width: 94%; }
+.msg.user { align-self: flex-end; background: var(--accent); color: var(--accent-ink); }
+.msg.bot { align-self: flex-start; background: var(--bg); border: 1px solid var(--line); }
+.msg.err { align-self: stretch; color: var(--danger); border: 1px solid var(--danger); background: transparent; }
+.sugg { align-self: stretch; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; background: var(--bg); }
+.sugg .item { display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; font-size: 13px; }
+.sugg .item span { flex: 1; min-width: 0; }
+.sugg .item button { flex: none; padding: 3px 9px; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 14px 8px; }
+.chip { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 3px 10px; font-size: 12px; }
+.chip:hover { border-color: var(--accent); }
+.compose { display: flex; gap: 8px; padding: 10px 14px 14px; border-top: 1px solid var(--line); }
+.compose textarea { flex: 1; resize: none; height: 58px; }
+
+#printall { display: none; }
+@media (max-width: 640px) {
+  .paper { padding: 18px 10px 22px; }
+  #title { font-size: 28px; }
+  .tools { gap: 12px 16px; }
+}
+@media print {
+  body { background: #fff; padding: 0; }
+  .top, .tools, .help, .toast, .partsbar, .panel, .drawer, .selpanel, .playbar { display: none !important; }
+  .paper { box-shadow: none; padding: 0; }
+  #score { width: 100%; height: auto; }
+  .head input { border: 0 !important; }
+  body.printall .wrap { display: none !important; }
+  body.printall #printall { display: block; }
+  #printall .page { break-after: page; page-break-after: always; }
+  #printall .page:last-child { break-after: auto; page-break-after: auto; }
+  #printall svg { width: 100%; height: auto; display: block; }
+}
+@media (prefers-reduced-motion: reduce) { .toast, .cents i { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M3 7h18M3 11h18M3 15h18M3 19h18" opacity=".55"/><ellipse cx="9" cy="16" rx="3" ry="2.2" fill="currentColor" stroke="none" transform="rotate(-20 9 16)"/><path d="M11.7 15.2V4.5l4.3 2.2" stroke-width="1.8"/></svg>
+      Quaver
+    </div>
+    <div class="actions">
+      <button class="btn" id="undo" title="Undo (Ctrl/Cmd+Z)">Undo</button>
+      <button class="btn" id="redo" title="Redo (Ctrl/Cmd+Shift+Z)">Redo</button>
+      <details class="menu" id="newmenu"><summary class="btn">New ▾</summary><div class="menu-list left" id="templatelist"></div></details>
+      <button class="btn compose" id="composebtn" title="Write a brand-new original piece">✨ Compose</button>
+      <button class="btn" id="importbtn" title="Import MIDI, MusicXML or a Quaver file">Import</button>
+      <button class="btn rec" id="micbtn" aria-pressed="false" title="Sing or play into your microphone"><span class="dot"></span>Mic</button>
+      <button class="btn" id="practicebtn" aria-pressed="false" title="Play along and get graded">Practice</button>
+      <button class="btn" id="earbtn" aria-pressed="false" title="Train your ear">Ear training</button>
+      <button class="btn" id="sonnetbtn" aria-pressed="false" title="Ask Sonnet to research, suggest or write music">✦ Sonnet</button>
+      <button class="btn primary" id="play" title="Play (Space)"><svg viewBox="0 0 24 24" fill="currentColor" id="playicon"><path d="M7 4.5v15l12-7.5z"/></svg><span id="playlabel">Play</span></button>
+      <button class="btn" id="loopbtn" aria-pressed="false" title="Loop the selected bars, or the whole piece">⟲ Loop</button>
+      <details class="menu" id="optmenu"><summary class="btn">Options ▾</summary>
+        <div class="menu-list">
+          <label><input type="checkbox" id="opt-click"><span>Metronome click<small>Clicks every beat during playback</small></span></label>
+          <label><input type="checkbox" id="opt-swing"><span>Swing eighth notes<small>Long-short jazz feel (saved with the score)</small></span></label>
+          <label><input type="checkbox" id="opt-real"><span>Realistic instrument sounds<small>Downloads 1–3 MB of recordings per instrument the first time</small></span></label>
+          <label><input type="checkbox" id="opt-names"><span>Show note names<small>Letter names next to each note</small></span></label>
+          <label><input type="checkbox" id="opt-finger"><span>Show fingerings<small>Trumpet valves and trombone slide positions</small></span></label>
+        </div>
+      </details>
+      <details class="menu" id="exportmenu"><summary class="btn">Save / Export ▾</summary>
+        <div class="menu-list">
+          <button data-act="json">Score file (.json)<small>Save your work to continue later</small></button>
+          <button data-act="musicxml">MusicXML<small>Open in MuseScore, Finale, Sibelius or Dorico</small></button>
+          <button data-act="midi">MIDI file<small>All parts, with dynamics and instruments</small></button>
+          <button data-act="video">Video (MP4)<small>The sheet music scrolling and lighting up with the sound</small></button>
+          <button data-act="wav">Audio (WAV)<small>A recording of the playback</small></button>
+          <button data-act="png">Image (PNG)<small>The view you are looking at</small></button>
+          <button data-act="print">Print / PDF (this view)<small>Opens your browser's print dialog</small></button>
+          <button data-act="printall">Print / PDF (score + every part)<small>One set of pages per player</small></button>
+        </div>
+      </details>
+      <input type="file" id="fileinput" accept=".json,.mid,.midi,.xml,.musicxml,.mxl,application/json,audio/midi" hidden>
+    </div>
+  </header>
+
+  <section class="tools" aria-label="Note tools">
+    <div class="group"><span class="lbl">Note length</span><div class="row" id="durs"></div></div>
+    <div class="group">
+      <span class="lbl">Modify</span>
+      <div class="row">
+        <button class="tool small" id="t-rest" aria-pressed="false" title="Rest (R)"></button>
+        <button class="tool small" id="t-dot" aria-pressed="false" title="Dotted note (.)"></button>
+        <button class="tool small" id="t-sharp" aria-pressed="false" title="Sharp (+)"></button>
+        <button class="tool small" id="t-flat" aria-pressed="false" title="Flat (-)"></button>
+        <button class="tool small" id="t-natural" aria-pressed="false" title="Natural (N)"></button>
+        <button class="tool small" id="t-chord" aria-pressed="false" title="Chord mode: click above or below a note to stack notes (Shift+A–G also adds)"></button>
+      </div>
+    </div>
+    <div class="group">
+      <span class="lbl">Dynamics, articulation &amp; slurs</span>
+      <div class="row" id="dynrow"></div>
+      <div class="row" id="artrow"></div>
+    </div>
+    <div class="group">
+      <span class="lbl">Score</span>
+      <div class="row">
+        <select id="clef" aria-label="Clef for this part"><option value="treble">Treble clef</option><option value="alto">Alto clef</option><option value="bass">Bass clef</option><option value="perc">Percussion clef</option></select>
+        <select id="key" aria-label="Starting key signature"></select>
+        <select id="ts" aria-label="Starting time signature"></select>
+        <label class="tempo" title="Starting tempo in beats per minute"><span>♩ =</span><input type="number" id="tempo" min="30" max="260" value="100" aria-label="Tempo in beats per minute"></label>
+      </div>
+    </div>
+  </section>
+
+  <section class="selpanel" aria-label="Selection">
+    <div class="selrow">
+      <span class="txt" id="statustxt"></span>
+      <div class="row">
+        <button class="btn sm" id="s-up" title="Move up (↑, Shift for an octave)">↑</button>
+        <button class="btn sm" id="s-down" title="Move down (↓)">↓</button>
+        <button class="btn sm" id="s-copy" title="Copy (Ctrl/Cmd+C)">Copy</button>
+        <button class="btn sm" id="s-paste" title="Paste after the selection (Ctrl/Cmd+V)">Paste</button>
+        <button class="btn sm" id="s-dup" title="Repeat the selection right after itself (Ctrl/Cmd+D)">Repeat</button>
+        <button class="btn sm danger" id="s-del" title="Delete (Backspace)">Delete</button>
+      </div>
+    </div>
+    <div class="selrow">
+      <label class="inl">Lyric <input type="text" id="lyric" placeholder="Syllable" spellcheck="false" autocomplete="off" title="Type a syllable; Space or Enter moves to the next note. End with - to join syllables."></label>
+      <label class="inl">Chord <input type="text" id="sym" placeholder="Am7" spellcheck="false" autocomplete="off" title="Chord symbol shown above the note; Space or Enter moves on"></label>
+      <span class="sep" aria-hidden="true"></span>
+      <span class="bartools">
+        <b id="barlabel">Bar –</b>
+        <button class="btn sm" id="b-rs" aria-pressed="false" title="Start repeat">𝄆 Repeat from</button>
+        <button class="btn sm" id="b-re" aria-pressed="false" title="End repeat">Repeat to 𝄇</button>
+        <select id="b-times" aria-label="Times to play the repeat" title="How many times the repeat plays"><option value="2">×2</option><option value="3">×3</option><option value="4">×4</option></select>
+        <button class="btn sm" id="b-e1" aria-pressed="false" title="First-time ending">1.</button>
+        <button class="btn sm" id="b-e2" aria-pressed="false" title="Second-time ending">2.</button>
+        <button class="btn sm" id="b-mark" aria-pressed="false" title="Rehearsal mark">Mark</button>
+        <select id="b-key" aria-label="Key change from this bar"></select>
+        <select id="b-ts" aria-label="Time change from this bar"></select>
+        <label class="inl">♩= <input type="number" id="b-tempo" min="30" max="260" placeholder="—" aria-label="Tempo change from this bar"></label>
+      </span>
+    </div>
+  </section>
+
+  <section class="partsbar" aria-label="Parts">
+    <div class="tabs" id="tabs" role="tablist"></div>
+    <div class="partctl">
+      <input type="text" id="pname" aria-label="Part name" spellcheck="false">
+      <select id="pinst" aria-label="Instrument"></select>
+      <label class="inl" title="Volume">Vol <input type="range" id="pvol" min="0" max="1" step="0.05" aria-label="Volume"></label>
+      <label class="inl" title="Pan: left to right">Pan <input type="range" id="ppan" min="-1" max="1" step="0.1" aria-label="Pan"></label>
+      <button class="btn sm" id="pmute" aria-pressed="false">Mute</button>
+      <button class="btn sm" id="psolo" aria-pressed="false">Solo</button>
+      <button class="btn sm" id="ptab" aria-pressed="false" title="Show guitar or bass tablature under the staff">Tab</button>
+      <button class="btn sm" id="pgrand" aria-pressed="false" title="Two staves joined by a brace, like piano music">Grand staff</button>
+      <button class="btn sm danger" id="pdel">Remove</button>
+      <button class="btn sm" id="concert" aria-pressed="true" title="On: every part shows the pitch you hear. Off: saxophones, clarinets, horns and trumpets show what their players read.">Concert pitch</button>
+    </div>
+  </section>
+
+  <section class="panel" id="micpanel" hidden>
+    <h3>Sing or play it in</h3>
+    <p id="micmsg">Press Record, wait for the count-in, then sing or play one note at a time. Headphones keep the click out of the recording. It writes into the selected part.</p>
+    <div class="microw">
+      <button class="btn rec" id="micgo"><span class="dot"></span><span id="micgolbl">Record</span></button>
+      <label><input type="checkbox" id="mic-count" checked> Count-in</label>
+      <label><input type="checkbox" id="mic-click" checked> Click while recording</label>
+      <label>Smallest note <select id="mic-grid" style="height:34px"><option value="0.5">Eighth</option><option value="0.25">Sixteenth</option><option value="1">Quarter</option></select></label>
+      <label>Octave <select id="mic-oct" style="height:34px"><option value="0">As heard</option><option value="12">Write 1 higher</option><option value="-12">Write 1 lower</option></select></label>
+      <button class="btn" id="micfile" type="button" title="Turn a voice memo or other recording into notes">Transcribe a recording…</button>
+      <input type="file" id="micfileinput" accept="audio/*,.mp3,.m4a,.wav,.ogg,.aac,.flac,.webm" hidden>
+      <div class="meter"><span class="livenote">–</span><div class="cents"><i></i></div></div>
+    </div>
+  </section>
+
+  <section class="panel" id="practicepanel" hidden>
+    <h3>Practice</h3>
+    <p id="prmsg">Play along with the selected part (or just the bars you select). Quaver listens through your microphone and marks each note green or red.</p>
+    <div class="microw">
+      <button class="btn primary" id="prgo">Start practising</button>
+      <label><input type="checkbox" id="pr-acc" checked> Play the other parts</label>
+      <label><input type="checkbox" id="pr-hear"> Also play my part</label>
+      <label><input type="checkbox" id="pr-click" checked> Metronome</label>
+      <button class="btn" id="prclear">Clear marks</button>
+      <div class="meter"><span class="livenote">–</span><div class="cents"><i></i></div></div>
+    </div>
+  </section>
+
+  <section class="panel" id="composepanel" hidden>
+    <h3>✨ Compose something new</h3>
+    <p id="cpmsg">Quaver writes an original piece: a chord progression, a melody built from its own motif, plus accompaniment, bass and drums. Every press gives a different piece. It replaces the current score; Undo brings yours back.</p>
+    <div class="microw">
+      <label>Style <select id="cp-style"><option value="any">Surprise me</option><option value="pop">Pop</option><option value="rock">Rock</option><option value="jazz">Jazz</option><option value="classical">Classical (string quartet)</option><option value="lofi">Lo-fi chill</option><option value="waltz">Folk waltz</option><option value="film">Film score</option></select></label>
+      <label>Mood <select id="cp-mood"><option value="any">Either</option><option value="maj">Bright (major)</option><option value="min">Dark (minor)</option></select></label>
+      <label>Length <select id="cp-bars"><option value="8">8 bars</option><option value="16" selected>16 bars</option><option value="32">32 bars</option></select></label>
+      <label><input type="checkbox" id="cp-play" checked> Play it right away</label>
+      <button class="btn primary" id="cp-go">✨ Compose another</button>
+      <button class="btn" id="cp-sonnet" title="Have Sonnet (needs your API key) write a piece in this style">Ask Sonnet instead</button>
+    </div>
+  </section>
+
+  <section class="panel" id="earpanel" hidden>
+    <h3>Ear training</h3>
+    <div class="microw">
+      <select id="earmode" aria-label="Exercise"><option value="int">Intervals</option><option value="note">Name the note (from C)</option><option value="chord">Chord types</option></select>
+      <button class="btn primary" id="earnext">Next</button>
+      <button class="btn" id="earreplay">Play again</button>
+      <span class="earscore" id="earscore">0 / 0</span>
+    </div>
+    <p id="earmsg">Press Next to hear a question.</p>
+    <div class="earchoices" id="earchoices"></div>
+  </section>
+
+  <main class="paper">
+    <div class="head">
+      <input id="title" aria-label="Title" placeholder="Untitled piece" spellcheck="false">
+      <div class="tempoline"><span><span class="n">♩</span> = <span id="tempoview">100</span></span><em id="viewlabel"></em></div>
+      <input id="composer" aria-label="Composer" placeholder="Composer" spellcheck="false">
+    </div>
+    <div id="sheet"><svg id="score" role="img" aria-label="Sheet music"></svg></div>
+  </main>
+
+  <details class="help">
+    <summary>How to use Quaver</summary>
+    <dl>
+      <dt>Click a staff</dt><dd>Place a note there. In the full score, the staff you click becomes the part you are writing.</dd>
+      <dt>Click / drag a note</dt><dd>Click selects it. Drag it up or down to change its pitch. Shift+click selects a range; double-click selects the whole bar.</dd>
+      <dt>Chords</dt><dd>Turn on Chord mode, then click above or below a note. Or select a note and press Shift+A–G.</dd>
+      <dt><kbd>A</kbd>–<kbd>G</kbd></dt><dd>Type a note by letter. <kbd>1</kbd>–<kbd>5</kbd> pick whole to sixteenth, <kbd>T</kbd> triplets.</dd>
+      <dt><kbd>R</kbd> <kbd>.</kbd> <kbd>+</kbd> <kbd>-</kbd> <kbd>N</kbd></dt><dd>Rest, dot, sharp, flat, natural. These apply to the next note you place.</dd>
+      <dt><kbd>Ctrl/Cmd</kbd>+<kbd>C</kbd> <kbd>V</kbd> <kbd>X</kbd> <kbd>D</kbd></dt><dd>Copy, paste, cut, and repeat the selection.</dd>
+      <dt><kbd>L</kbd> / <kbd>K</kbd></dt><dd>Type lyrics / chord symbols for the selected note. Space or Enter moves to the next note.</dd>
+      <dt><kbd>S</kbd></dt><dd>Slur the selected notes.</dd>
+      <dt><kbd>Space</kbd></dt><dd>Play or stop from the selected note. Turn on Loop to repeat the selected bars.</dd>
+      <dt><kbd>Esc</kbd></dt><dd>Stop the music, even while you're typing in a box. The red Stop button at the bottom of the screen also stays visible while music plays.</dd>
+    </dl>
+  </details>
+</div>
+
+<aside class="drawer" id="sonnet" hidden aria-label="Sonnet music assistant">
+  <header><b>Sonnet</b><button class="btn" id="sonnetclose" aria-label="Close">Close</button></header>
+  <div class="cfg">
+    <label>API key <input type="password" id="apikey" placeholder="sk-ant-…" autocomplete="off" spellcheck="false"></label>
+    <label><input type="checkbox" id="keysave"> Remember the key in this browser</label>
+    <label><input type="checkbox" id="websearch" checked> Let Sonnet search the web</label>
+    <small>Sonnet reads your score, researches it, suggests markings, and can write new music (harmonies, bass lines, drum grooves, arrangements) that you add with one click. Your key goes only to Anthropic. Don't save it on a shared computer.</small>
+  </div>
+  <div class="chat" id="chat" aria-live="polite"></div>
+  <div class="chips" id="chips"></div>
+  <form class="compose" id="compose">
+    <textarea id="chatin" placeholder="e.g. “Write a walking bass line for this”" aria-label="Message"></textarea>
+    <button class="btn primary" id="chatsend" type="submit">Send</button>
+  </form>
+</aside>
+
+<div id="printall"></div>
+<div class="playbar" id="playbar" role="region" aria-label="Playback" hidden>
+  <button class="pbstop" id="pbstop" title="Stop (Space or Esc)"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>Stop</button>
+  <div class="pbinfo"><b id="pbbar">Starting…</b><span id="pbtime"></span></div>
+  <span class="pbkeys"><kbd>Space</kbd> or <kbd>Esc</kbd></span>
+  <i class="pbprog" aria-hidden="true"><i id="pbfill"></i></i>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script src="js/theory.js?v=5"></script>
+<script src="js/render.js?v=5"></script>
+<script src="js/audio.js?v=5"></script>
+<script src="js/io.js?v=5"></script>
+<script src="js/extras.js?v=5"></script>
+<script src="js/composer.js?v=5"></script>
+<script src="js/video.js?v=5"></script>
+<script src="js/app.js?v=5"></script>
+</body>
+</html>

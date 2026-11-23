@@ -1,0 +1,5 @@
+# local preview settings
+.claude/
+# generated copy for claude.ai (rebuild with tools/build_publish.py)
+publish/
+.DS_Store
