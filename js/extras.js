@@ -43,8 +43,9 @@ const mic = { on: false };
 function micMsg(t) { $('micmsg').textContent = t; }
 async function openMic(msgFn) {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { msgFn('Microphone access is not available here. Open this page over https or from localhost in a current browser.'); return null; }
+  audioSession('play-and-record');
   try { return await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }); }
-  catch (e) { msgFn(e && e.name === 'NotAllowedError' ? 'Microphone permission was denied. Allow it in your browser settings, then try again.' : 'Could not open the microphone: ' + (e && e.message ? e.message : e)); return null; }
+  catch (e) { audioSession('playback'); msgFn(e && e.name === 'NotAllowedError' ? 'Microphone permission was denied. Allow it in your browser settings, then try again.' : 'Could not open the microphone: ' + (e && e.message ? e.message : e)); return null; }
 }
 function showLive(r) {
   let name = '–', left = '50%';
@@ -74,6 +75,7 @@ function micTick() {
 function micStop() {
   if (!mic.on) return; mic.on = false; clearInterval(mic.timer);
   try { mic.stream.getTracks().forEach((t) => t.stop()); mic.src.disconnect(); } catch (e) {}
+  audioSession('playback');
   $('micgolbl').textContent = 'Record'; $('micgo').classList.remove('on'); $('micbtn').classList.remove('on'); showLive({});
   const evs = transcribeFrames(mic.frames, mic.spb, +$('mic-grid').value, +$('mic-oct').value);
   if (!evs.length) { micMsg('No clear notes were heard. Try again closer to the microphone, one note at a time.'); return; }
@@ -157,6 +159,7 @@ function judgePractice(frames, expected) {
 function practiceStop() {
   if (!practice.on) return; practice.on = false; clearInterval(practice.timer);
   try { practice.stream.getTracks().forEach((t) => t.stop()); practice.src.disconnect(); } catch (e) {}
+  audioSession('playback');
   stopPlay(); showLive({}); $('prgo').textContent = 'Start practising';
   const res = judgePractice(practice.frames, practice.expected.filter((e) => e.T2 <= audio.currentTime + 0.05));
   showPracticeResult(practice.p, res);

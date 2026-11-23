@@ -10,11 +10,26 @@ function makeMaster(a) {
   const comp = a.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 8; comp.knee.value = 6; comp.attack.value = 0.002; comp.release.value = 0.15;
   m.connect(comp); comp.connect(a.destination); return m;
 }
+/* iPhone and iPad: play like a music app, so the silent switch doesn't mute the score
+   ('play-and-record' while the mic is open, which recording needs) */
+function audioSession(type) { try { if (navigator.audioSession && navigator.audioSession.type !== type) navigator.audioSession.type = type; } catch (e) {} }
+/* asks a paused (or interrupted) audio context to run again; never throws */
+function wake(a) {
+  if (!a || isOffline(a) || a.state === 'running' || a.state === 'closed') return Promise.resolve();
+  try { const p = a.resume(); return p && p.then ? p.catch(() => {}) : Promise.resolve(); } catch (e) { return Promise.resolve(); }
+}
 function ctx() {
-  if (!audio) { audio = new (window.AudioContext || window.webkitAudioContext)(); master = makeMaster(audio); }
-  if (!isOffline(audio) && audio.state === 'suspended') audio.resume();
+  if (!audio) {
+    audioSession(typeof mic !== 'undefined' && mic.on ? 'play-and-record' : 'playback');
+    const a = (audio = new (window.AudioContext || window.webkitAudioContext)()); master = makeMaster(a);
+    // a phone call, another app or the system can pause the sound mid-piece: stop cleanly and say so
+    a.onstatechange = () => { if (a === audio && a.state !== 'running' && a.state !== 'closed' && playing) { stopAny(); toast('Your device paused the sound. Press Play to start again.'); } };
+  }
+  wake(audio);
   return audio;
 }
+/* any click, tap or key press lets a blocked audio context start */
+['pointerdown', 'keydown', 'touchend'].forEach((ev) => document.addEventListener(ev, () => { if (audio && !isOffline(audio) && audio.state !== 'running') wake(audio); }, true));
 let waves = {};
 function wave(name, harm) { if (!waves[name]) waves[name] = ctx().createPeriodicWave(new Float32Array(harm.length), Float32Array.from(harm)); return waves[name]; }
 let noiseBuf = null;
@@ -350,6 +365,11 @@ async function togglePlay() {
   const token = (starting = {}); setPlayUI();
   if (prefs.real) await preloadForScore();
   if (starting !== token) return; // stopped while the sounds were loading
+  if (audio.state !== 'running') {   // give the browser a moment to start the sound, then say if it won't
+    await Promise.race([wake(audio), new Promise((r) => setTimeout(r, 1500))]);
+    if (starting !== token) return;
+    if (audio.state !== 'running') { starting = null; setPlayUI(); toast('Sound is blocked on this page. Check the tab isn’t muted, click the page once, then press Play again.'); return; }
+  }
   starting = null;
   const plan = buildPlan(), full = playOrder(plan.nBars), range = selRange();
   let order = full, startIdx = 0, startBeat = 0;
