@@ -23,10 +23,20 @@ function ctx() {
     audioSession(typeof mic !== 'undefined' && mic.on ? 'play-and-record' : 'playback');
     const a = (audio = new (window.AudioContext || window.webkitAudioContext)()); master = makeMaster(a);
     // a phone call, another app or the system can pause the sound mid-piece: stop cleanly and say so
-    a.onstatechange = () => { if (a === audio && a.state !== 'running' && a.state !== 'closed' && playing) { stopAny(); toast('Your device paused the sound. Press Play to start again.'); } };
+    a.onstatechange = () => {
+      const metroOn = typeof metro !== 'undefined' && metro.on;
+      if (a === audio && a.state !== 'running' && a.state !== 'closed' && (playing || metroOn)) { stopAny(); toast(`Your device paused the sound. Press ${playing ? 'Play' : 'Start'} to begin again.`); }
+    };
   }
   wake(audio);
   return audio;
+}
+/* gives the browser a moment to start the sound; false if it won't */
+const SOUND_BLOCKED = 'Sound is blocked on this page. Check the tab isn’t muted, click the page once, then try again.';
+async function soundReady() {
+  if (audio.state === 'running') return true;
+  await Promise.race([wake(audio), new Promise((r) => setTimeout(r, 1500))]);
+  return audio.state === 'running';
 }
 /* any click, tap or key press lets a blocked audio context start */
 ['pointerdown', 'keydown', 'touchend'].forEach((ev) => document.addEventListener(ev, () => { if (audio && !isOffline(audio) && audio.state !== 'running') wake(audio); }, true));
@@ -354,22 +364,22 @@ function playEvent(ev, inst, bus, kit, n) {
 /* ---------- play / stop / loop ---------- */
 let playSession = null, starting = null, pbFrame = 0;
 const isBusy = () => playing || !!starting;
-/* the one "stop" every button and key uses: also ends practice mode cleanly */
+/* the one "stop" every button and key uses: also ends practice mode and the metronome cleanly */
 function stopAny() {
+  if (typeof metroStop === 'function') metroStop();
   if (typeof practice !== 'undefined' && practice.on) practiceStop(); else stopPlay();
 }
 async function togglePlay() {
   if (isBusy()) { stopAny(); return; }
+  if (typeof metroStop === 'function') metroStop(); // Play has its own click (Options › Metronome click)
   if (!S.parts.some((p) => p.notes.length)) { toast('Add a few notes first.'); return; }
   try { ctx(); } catch (e) { toast('Audio is not available in this browser.'); return; }
   const token = (starting = {}); setPlayUI();
   if (prefs.real) await preloadForScore();
   if (starting !== token) return; // stopped while the sounds were loading
-  if (audio.state !== 'running') {   // give the browser a moment to start the sound, then say if it won't
-    await Promise.race([wake(audio), new Promise((r) => setTimeout(r, 1500))]);
-    if (starting !== token) return;
-    if (audio.state !== 'running') { starting = null; setPlayUI(); toast('Sound is blocked on this page. Check the tab isn’t muted, click the page once, then press Play again.'); return; }
-  }
+  const ok = await soundReady();
+  if (starting !== token) return;
+  if (!ok) { starting = null; setPlayUI(); toast(SOUND_BLOCKED); return; }
   starting = null;
   const plan = buildPlan(), full = playOrder(plan.nBars), range = selRange();
   let order = full, startIdx = 0, startBeat = 0;
@@ -439,6 +449,7 @@ function blip(midi, inst) { try { if (!playing && !(typeof mic !== 'undefined' &
 /* renders the whole piece offline; with withEvents it also returns when each note sounds (for the video) */
 async function renderWAV(sr = 44100, withEvents = false) {
   if (playing) stopPlay();
+  if (typeof metroStop === 'function') metroStop();
   ctx();
   if (prefs.real) await preloadForScore();
   const plan = buildPlan(), order = playOrder(plan.nBars);

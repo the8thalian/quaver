@@ -87,7 +87,7 @@ function parseMIDI(bytes) {
   const vlqR = () => { let v = 0, b; do { b = dv.getUint8(p++); v = (v << 7) | (b & 0x7f); } while (b & 0x80); return v; };
   for (let t = 0; t < nt && p < dv.byteLength; t++) {
     if (str(4) !== 'MTrk') break; const len = dv.getUint32(p); p += 4; const endp = p + len;
-    const tr = { name: '', prog: null, notes: [] }; let tick = 0, run = 0; const on = {};
+    const tr = { name: '', prog: null, progs: {}, notes: [] }; let tick = 0, run = 0; const on = {};
     while (p < endp) {
       tick += vlqR(); let st = dv.getUint8(p);
       if (st < 0x80) st = run; else { p++; if (st < 0xf0) run = st; }
@@ -101,11 +101,11 @@ function parseMIDI(bytes) {
       } else if (st === 0xf0 || st === 0xf7) p += vlqR();
       else {
         const hi = st & 0xf0, ch = st & 0x0f;
-        if (hi === 0xc0 || hi === 0xd0) { const d1 = dv.getUint8(p++); if (hi === 0xc0 && tr.prog === null && ch !== 9) tr.prog = d1; }
+        if (hi === 0xc0 || hi === 0xd0) { const d1 = dv.getUint8(p++); if (hi === 0xc0 && ch !== 9) { if (tr.prog === null) tr.prog = d1; if (tr.progs[ch] === undefined) tr.progs[ch] = d1; } }
         else {
           const d1 = dv.getUint8(p++), d2 = dv.getUint8(p++), k = ch + ':' + d1;
           if (hi === 0x90 && d2 > 0) on[k] = tick;
-          else if (hi === 0x80 || (hi === 0x90 && d2 === 0)) { if (on[k] !== undefined) { tr.notes.push({ s: on[k], e: tick, m: d1, dr: ch === 9 }); delete on[k]; } }
+          else if (hi === 0x80 || (hi === 0x90 && d2 === 0)) { if (on[k] !== undefined) { tr.notes.push({ s: on[k], e: tick, m: d1, ch, dr: ch === 9 }); delete on[k]; } }
         }
       }
     }
@@ -129,15 +129,27 @@ function drumPart(list, tpq, cap, name) {
 }
 function midiToScore(m, fname) {
   const key = clampKey(m.key), ts = m.ts, cap = ts[0] * 4 / ts[1], parts = [];
-  m.tracks.forEach((tr) => {
-    if (parts.length >= 16) return;
+  const line = (list, inst, name, extra) => {
+    const evs = quantizeEvents(chordEvents(list, m.tpq), 0.25), I = INSTR[inst];
+    const all = evs.flatMap((e) => e.midis), avg = all.reduce((s, x) => s + x, 0) / Math.max(1, all.length) + (I.cs || 0);
+    return Object.assign({ name, inst, clef: I.clef === 'alto' ? 'alto' : avg < 57 ? 'bass' : 'treble', wclef: I.wclef, notes: eventsToNotes(evs, cap, key) }, extra || {});
+  };
+  m.tracks.forEach((tr, ti) => {
     const pitched = tr.notes.filter((n) => !n.dr), drums = tr.notes.filter((n) => n.dr);
-    if (pitched.length) {
-      const evs = quantizeEvents(chordEvents(pitched, m.tpq), 0.25);
-      let inst = instFromName(tr.name, tr.prog); if (INSTR[inst].kit) inst = 'piano';
-      const I = INSTR[inst], all = evs.flatMap((e) => e.midis), avg = all.reduce((s, x) => s + x, 0) / Math.max(1, all.length) + (I.cs || 0);
-      parts.push({ name: tr.name || I.name, inst, clef: I.clef === 'alto' ? 'alto' : avg < 57 ? 'bass' : 'treble', wclef: I.wclef, notes: eventsToNotes(evs, cap, key) });
-    }
+    // one track can hold several instruments on different channels (every "type 0" file does): give each its own part
+    const chans = [...new Set(pitched.map((n) => n.ch))].sort((a, b) => a - b);
+    chans.forEach((ch) => {
+      if (parts.length >= 16) return;
+      const list = chans.length > 1 ? pitched.filter((n) => n.ch === ch) : pitched, prog = tr.progs[ch] !== undefined ? tr.progs[ch] : tr.prog;
+      let inst = instFromName(chans.length > 1 ? '' : tr.name, prog); if (INSTR[inst].kit) inst = 'piano';
+      const name = (chans.length > 1 ? '' : tr.name) || INSTR[inst].name;
+      // a keyboard track that plays in both hands becomes a grand staff, split at middle C
+      const hiN = list.filter((n) => n.m >= 60).length, loN = list.length - hiN;
+      if (INSTR[inst].grand && hiN >= list.length * 0.15 && loN >= list.length * 0.15 && parts.length < 15) {
+        const brace = 'm' + ti + '_' + ch;
+        parts.push(line(list.filter((n) => n.m >= 60), inst, name + ' (RH)', { brace, clef: 'treble' }), line(list.filter((n) => n.m < 60), inst, name + ' (LH)', { brace, clef: 'bass', wclef: 'bass' }));
+      } else parts.push(line(list, inst, name));
+    });
     if (drums.length && parts.length < 16) parts.push(drumPart(drums, m.tpq, cap, pitched.length ? '' : tr.name));
   });
   if (!parts.length) throw new Error('No notes found in that MIDI file');
@@ -188,9 +200,15 @@ function buildMIDI() {
 /* ---------- MusicXML import ---------- */
 const XML_TYPES = { whole: 'w', half: 'h', quarter: 'q', eighth: 'e', '16th': 's', '32nd': 's', '64th': 's', breve: 'w' };
 const KIND_SYM = { major: '', minor: 'm', augmented: '+', diminished: 'dim', dominant: '7', 'major-seventh': 'maj7', 'minor-seventh': 'm7', 'diminished-seventh': 'dim7', 'augmented-seventh': '+7', 'half-diminished': 'm7b5', 'major-sixth': '6', 'minor-sixth': 'm6', 'dominant-ninth': '9', 'major-ninth': 'maj9', 'minor-ninth': 'm9', 'suspended-fourth': 'sus4', 'suspended-second': 'sus2', power: '5' };
+/* rests that add up to b beats, largest first */
+function xmlRests(b) {
+  const out = []; let rem = b;
+  while (rem > EPS) { const leg = LEGAL.find((l) => l.b <= rem + EPS); if (!leg) break; out.push({ type: 'rest', pitch: 0, alt: 0, dur: leg.d, dots: leg.dots }); rem -= leg.b; }
+  return out;
+}
 function xmlToScore(text) {
   const doc = new DOMParser().parseFromString(text, 'application/xml');
-  if (doc.querySelector('parsererror')) throw new Error('Could not read that MusicXML file');
+  if (doc.querySelector('parsererror')) throw new Error('Couldn’t read that MusicXML file. It may be damaged or cut short; try exporting or downloading it again.');
   if (!doc.querySelector('score-partwise')) throw new Error('Only “partwise” MusicXML is supported');
   const tx = (el, q) => { const e = el.querySelector(q); return e ? e.textContent.trim() : ''; };
   const names = {}; doc.querySelectorAll('part-list > score-part').forEach((sp) => { names[sp.getAttribute('id')] = { name: tx(sp, 'part-name'), prog: tx(sp, 'midi-program') ? +tx(sp, 'midi-program') - 1 : null }; });
@@ -198,13 +216,15 @@ function xmlToScore(text) {
   const bar = (k) => (bars[k] = bars[k] || {});
   doc.querySelectorAll('score-partwise > part').forEach((partEl, pi) => {
     const info = names[partEl.getAttribute('id')] || { name: '' };
-    let div = 1, trans = 0, ckey = 0, lastKey = null, lastTs = null; const staves = {}, kitSt = {}, clefs = {}, voiceOf = {}, lastNote = {}, pend = {}, slurOpen = {};
+    let div = 1, trans = 0, ckey = 0, lastKey = null, lastTs = null, nStaves = 1; const staves = {}, kitSt = {}, clefs = {}, voiceOf = {}, lastNote = {}, pend = {}, slurOpen = {};
     let ending = null;
     partEl.querySelectorAll(':scope > measure').forEach((me, mi) => {
+      const mpos = {}; // beats written so far in this bar, per staff
       Array.from(me.children).forEach((el) => {
         const tag = el.tagName;
         if (tag === 'attributes') {
           if (el.querySelector('divisions')) div = +tx(el, 'divisions') || div;
+          if (el.querySelector('staves')) nStaves = Math.max(1, Math.min(4, +tx(el, 'staves') || 1));
           if (el.querySelector('transpose')) trans = (+tx(el, 'transpose > chromatic') || 0) + 12 * (+tx(el, 'transpose > octave-change') || 0);
           if (el.querySelector('key > fifths')) {
             ckey = transKey(+tx(el, 'key > fifths') || 0, trans);
@@ -233,7 +253,14 @@ function xmlToScore(text) {
           if (rp) { if (rp.getAttribute('direction') === 'forward') bar(mi).repStart = true; else { bar(mi).repEnd = true; if (rp.getAttribute('times')) bar(mi).times = +rp.getAttribute('times'); } }
           const en = el.querySelector('ending');
           if (en) { const num = parseInt(en.getAttribute('number'), 10) || 1, t = en.getAttribute('type'); if (t === 'start') ending = { num, from: mi }; else if (ending) { for (let q = ending.from; q <= mi; q++) bar(q).ending = ending.num; ending = null; } }
+        } else if (tag === 'forward') { // an invisible rest in the voice we're reading (unlabelled ones are covered by the bar-end fill)
+          const staff = tx(el, ':scope > staff') || '1', voice = tx(el, ':scope > voice');
+          if (!voice || voiceOf[staff] !== voice) return;
+          const list = staves[staff] || (staves[staff] = []);
+          xmlRests((+tx(el, ':scope > duration') || 0) / div).forEach((r) => { list.push(r); mpos[staff] = (mpos[staff] || 0) + beats(r); });
         } else if (tag === 'note') {
+          // grace and cue notes take no time in the bar; reading them as real notes pushed every later bar out of line
+          if (el.querySelector(':scope > grace, :scope > cue')) return;
           const staff = tx(el, ':scope > staff') || '1', voice = tx(el, ':scope > voice') || '1';
           if (voiceOf[staff] === undefined) voiceOf[staff] = voice; if (voiceOf[staff] !== voice) return;
           const list = staves[staff] || (staves[staff] = []);
@@ -264,13 +291,24 @@ function xmlToScore(text) {
             }
             if (!isRest && (el.querySelector('tie[type="start"]') || k < pieces.length - 1)) n.tie = true;
             list.push(n); if (!isRest) lastNote[staff] = n;
+            mpos[staff] = (mpos[staff] || 0) + beats(n);
           });
         }
       });
+      // keep every staff in step: fill short bars with rests, and pad a pickup bar at the front so bar lines land in the right places
+      for (let s = 1; s <= nStaves; s++) staves[s] = staves[s] || [];
+      const cap = lastTs ? lastTs[0] * 4 / lastTs[1] : 4, keys = Object.keys(staves), most = Math.max(0, ...keys.map((s) => mpos[s] || 0));
+      const implicit = me.getAttribute('implicit') === 'yes', pickup = mi === 0 && most > EPS && most < cap - EPS;
+      const target = pickup || implicit ? most : cap;
+      keys.forEach((s) => {
+        const short = target - (mpos[s] || 0);
+        if (short > EPS) staves[s].push(...xmlRests(short));
+        if (pickup) { const lead = xmlRests(cap - most); staves[s].unshift(...lead); if (slurOpen[s] !== undefined) slurOpen[s] += lead.length; }
+      });
     });
-    const keys = Object.keys(staves).sort(), brace = keys.length > 1 ? 'x' + pi : '';
+    const keys = Object.keys(staves).sort(), brace = keys.filter((sk) => staves[sk].some((n) => n.type === 'note')).length > 1 ? 'x' + pi : '';
     keys.forEach((sk) => {
-      if (!staves[sk].length) return;
+      if (!staves[sk].some((n) => n.type === 'note')) return;
       const xclef = clefs[sk] || (sk === '2' ? 'bass' : 'treble'), isK = kitSt[sk] || xclef === 'perc';
       let inst = instFromName(info.name, info.prog);
       if (isK && !INSTR[inst].kit) inst = 'drums'; if (!isK && INSTR[inst].kit) inst = 'piano';
@@ -298,14 +336,31 @@ async function unzipMXL(buf) {
   if (ent.method === 0) return new TextDecoder().decode(data);
   return await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
 }
+/* what to do with files Quaver can't open, by extension */
+const IMPORT_HINTS = [
+  [/\.(mscz|mscx)$/, 'That’s a MuseScore file. In MuseScore choose File › Export, pick MusicXML, then import the file it saves.'],
+  [/\.(sib|musx|mus|dorico|dorico\w*|sty|ptb|gp\d?|gpx)$/, 'Quaver can’t open that program’s own files. Export it as MusicXML (or MIDI) from that program first, then import that.'],
+  [/\.pdf$/, 'Quaver can’t read PDFs, which are pictures of the music. Turn it into MusicXML first with a sheet-music scanning app, then import that.'],
+  [/\.(png|jpe?g|gif|webp|heic|tiff?|bmp)$/, 'Quaver can’t read photos of sheet music. Turn it into MusicXML first with a sheet-music scanning app, then import that.'],
+  [/\.(mp3|m4a|wav|aiff?|ogg|oga|aac|flac|webm|opus|caf)$/, 'That’s a recording. Use Mic › Transcribe a recording instead: it turns a melody into notes.'],
+  [/\.(zip)$/, 'That’s a zip file. Unzip it first, then import the .musicxml, .mxl or .mid file inside.']
+];
 async function importFile(f) {
   const name = f.name.toLowerCase(); let sc;
-  if (/\.json$/.test(name)) sc = normalize(JSON.parse(await f.text()));
-  else if (/\.midi?$/.test(name)) sc = midiToScore(parseMIDI(new Uint8Array(await f.arrayBuffer())), f.name);
-  else if (/\.mxl$/.test(name)) sc = xmlToScore(await unzipMXL(await f.arrayBuffer()));
-  else if (/\.(xml|musicxml)$/.test(name)) sc = xmlToScore(await f.text());
-  else throw new Error('Use a .mid, .musicxml, .mxl or Quaver .json file');
-  if (!sc) throw new Error('That file has no readable score');
+  const hint = IMPORT_HINTS.find(([re]) => re.test(name)); if (hint) throw new Error(hint[1]);
+  let head = ''; try { head = new TextDecoder().decode(new Uint8Array(await f.slice(0, 512).arrayBuffer())); } catch (e) {}
+  try {
+    // go by what's inside when the name doesn't say (downloads often lose or change their extension)
+    if (/\.json$/.test(name) || (!/\.\w+$/.test(name) && /^\s*\{/.test(head))) sc = normalize(JSON.parse(await f.text()));
+    else if (/\.(midi?|kar)$/.test(name) || head.startsWith('MThd')) sc = midiToScore(parseMIDI(new Uint8Array(await f.arrayBuffer())), f.name);
+    else if (/\.mxl$/.test(name) || head.startsWith('PK')) sc = xmlToScore(await unzipMXL(await f.arrayBuffer()));
+    else if (/\.(xml|musicxml)$/.test(name) || /<score-(partwise|timewise)/.test(head) || /^\s*<\?xml/.test(head)) sc = xmlToScore(await f.text());
+    else throw new Error('Quaver can import MusicXML (.musicxml, .xml, .mxl), MIDI (.mid) and Quaver score files (.json).');
+  } catch (e) {
+    if (e && e.constructor === Error) throw e; // our own messages; anything else is a crash on a damaged or unusual file
+    throw new Error('Couldn’t read that file. It may be damaged, or saved in a way Quaver can’t read yet. If you can, export it again as MusicXML.');
+  }
+  if (!sc) throw new Error('That file has no score Quaver can read.');
   return sc;
 }
 

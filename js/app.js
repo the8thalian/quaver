@@ -16,7 +16,8 @@ const vpList = () => (view === 'score' ? S.parts.map((_, i) => i) : braceGroup(v
 function selRange() { if (sel < 0 || sel >= NT().length) return null; const a = selA < 0 || selA >= NT().length ? sel : selA; return [Math.min(a, sel), Math.max(a, sel)]; }
 const rangeIdx = () => { const r = selRange(), out = []; if (r) for (let i = r[0]; i <= r[1]; i++) out.push(i); return out; };
 const currentLabel = () => (view === 'score' ? (playerGroups().length > 1 ? 'Full score' : '') : braceLabel(S.parts[view].name) + ' – part');
-function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2800); }
+/* longer messages stay up longer, so there's time to read them */
+function toast(msg, ms) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), ms || Math.min(9000, Math.max(2800, msg.length * 55))); }
 function save() { try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) {} }
 function mutate(fn) { undoStack.push(JSON.stringify(S)); if (undoStack.length > 100) undoStack.shift(); redoStack = []; practiceMarks = {}; fn(); changed(); }
 function restore(json) { S = JSON.parse(json); sel = selA = -1; changed(); syncMeta(); }
@@ -387,7 +388,7 @@ function buildToolbar() {
   });
   [['opt-click', 'click'], ['opt-real', 'real'], ['opt-names', 'names'], ['opt-finger', 'finger']].forEach(([id, key]) => {
     $(id).checked = !!prefs[key];
-    $(id).onchange = (e) => { prefs[key] = e.target.checked; savePrefs(); render(); if (key === 'real' && prefs.real) preloadForScore().then((f) => { if (!f) toast('Recorded sounds ready.'); }); };
+    $(id).onchange = (e) => { prefs[key] = e.target.checked; savePrefs(); render(); if (key === 'click') $('mt-play').checked = prefs.click; if (key === 'real' && prefs.real) preloadForScore().then((f) => { if (!f) toast('Recorded sounds ready.'); }); };
   });
   $('opt-swing').onchange = (e) => { S.swing = e.target.checked; save(); };
   // panels
@@ -395,6 +396,7 @@ function buildToolbar() {
   panel('micbtn', 'micpanel', () => { if (mic.on) micStop(); });
   panel('practicebtn', 'practicepanel', () => { if (practice.on) practiceStop(); });
   panel('earbtn', 'earpanel');
+  panel('metrobtn', 'metropanel', metroStop); initMetronome();
   $('micgo').onclick = () => (mic.on ? micStop() : micStart());
   $('prgo').onclick = () => (practice.on ? practiceStop() : practiceStart());
   $('prclear').onclick = () => { practiceMarks = {}; render(); prMsg('Marks cleared.'); };
@@ -431,15 +433,24 @@ function buildToolbar() {
   try { const k = localStorage.getItem('quaver:apikey'); if (k) { $('apikey').value = k; $('keysave').checked = true; } } catch (e) {}
   addMsg('bot', "Hi, I'm Sonnet. I can research this piece, suggest dynamics and ornaments, and write music for you: harmonies, bass lines, drum grooves or whole arrangements.");
   // import / export
-  $('importbtn').onclick = () => $('fileinput').click();
-  $('fileinput').addEventListener('change', async (e) => {
-    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  const importPicked = async (f) => {
     try {
       const sc = await importFile(f);
       if (isBusy()) stopAny();
       mutate(() => { S = sc; ap = 0; view = 'score'; sel = selA = -1; }); syncMeta();
-      toast(`Imported ${sc.parts.length} part${sc.parts.length > 1 ? 's' : ''}, ${playBars()} bars.`);
-    } catch (err) { toast(err.message || 'Could not import that file.'); }
+      toast(`Imported “${f.name}”: ${sc.parts.length} part${sc.parts.length > 1 ? 's' : ''}, ${playBars()} bars. Undo brings your old score back.`);
+    } catch (err) { toast((err && err.message) || 'Couldn’t import that file.'); }
+  };
+  $('importbtn').onclick = () => $('fileinput').click();
+  $('fileinput').addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) importPicked(f); });
+  // or drop a file anywhere on the page
+  let dragDepth = 0; const hasFiles = (e) => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+  document.addEventListener('dragenter', (e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth++; document.body.classList.add('dropping'); });
+  document.addEventListener('dragover', (e) => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+  document.addEventListener('dragleave', (e) => { if (!hasFiles(e)) return; if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove('dropping'); } });
+  document.addEventListener('drop', (e) => {
+    if (!hasFiles(e)) return; e.preventDefault(); dragDepth = 0; document.body.classList.remove('dropping');
+    const f = e.dataTransfer.files[0]; if (f) importPicked(f);
   });
   document.querySelectorAll('#exportmenu .menu-list button').forEach((b) => b.addEventListener('click', async () => {
     $('exportmenu').open = false; const a = b.dataset.act;
@@ -544,8 +555,10 @@ function adaptForClaude() {
 const TEXT_INPUTS = /^(text|search|email|url|password|number|tel|)$/;
 const typingIn = (el) => { const tag = (el.tagName || '').toLowerCase(); return tag === 'textarea' || el.isContentEditable || (tag === 'input' && TEXT_INPUTS.test((el.getAttribute('type') || '').toLowerCase())); };
 document.addEventListener('keydown', (e) => {
-  // while music plays, Esc stops it from anywhere, and so does Space unless you're typing words
-  if (isBusy() && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 'Escape' || (e.key === ' ' && !typingIn(e.target)))) {
+  // Space or Enter on Tap tempo taps the moment the key goes down
+  if (e.target.id === 'mt-tap' && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); if (!e.repeat) metroTap(); return; }
+  // while music or the metronome plays, Esc stops it from anywhere, and so does Space unless you're typing words
+  if ((isBusy() || metro.on) && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 'Escape' || (e.key === ' ' && !typingIn(e.target)))) {
     e.preventDefault(); stopAny(); return;
   }
   const tag = (e.target.tagName || '').toLowerCase();
@@ -564,6 +577,7 @@ document.addEventListener('keydown', (e) => {
   else if (lk === 'r') toggleMod('rest'); else if (k === '.') toggleMod('dot');
   else if (k === '+' || k === '=') toggleMod('acc', '#'); else if (k === '-' || k === '_') toggleMod('acc', 'b'); else if (lk === 'n') toggleMod('acc', 'n');
   else if (lk === 's') toggleSlur();
+  else if (lk === 'm') { if (!metro.on) { $('metropanel').hidden = false; press($('metrobtn'), true); } metroToggle(); }
   else if (lk === 'l') { e.preventDefault(); $('lyric').focus(); } else if (lk === 'k') { e.preventDefault(); $('sym').focus(); }
   else if (k === 'ArrowUp') { e.preventDefault(); movePitch(e.shiftKey ? 7 : 1); } else if (k === 'ArrowDown') { e.preventDefault(); movePitch(e.shiftKey ? -7 : -1); }
   else if (k === 'ArrowRight' || k === 'ArrowLeft') {

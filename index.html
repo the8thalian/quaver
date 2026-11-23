@@ -134,6 +134,40 @@ input[type=number] { width: 76px; }
 .cents { position: relative; flex: 1; height: 8px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; }
 .cents i { position: absolute; top: -4px; width: 4px; height: 14px; background: var(--accent); border-radius: 2px; left: 50%; transform: translateX(-50%); transition: left .05s; }
 .cents::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--muted); opacity: .6; }
+.btn .mtled { width: 8px; height: 8px; border-radius: 50%; background: var(--line); flex: none; transition: background .08s, box-shadow .08s; }
+.btn .mtled.on { background: var(--accent); }
+.btn .mtled.beat { background: var(--rec); box-shadow: 0 0 0 3px color-mix(in srgb, var(--rec) 28%, transparent); }
+.metro { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px 20px; align-items: center; }
+.mt-pend { width: 58px; height: 76px; }
+.mt-case { fill: var(--bg); stroke: var(--line); stroke-width: 1.5; stroke-linejoin: round; }
+.mt-scale { stroke: var(--muted); stroke-width: 1; opacity: .45; fill: none; }
+#mt-arm line { stroke: var(--ink); stroke-width: 2.2; stroke-linecap: round; }
+#mt-arm rect { fill: var(--accent); }
+.mt-pivot { fill: var(--ink); }
+.mt-main { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.mt-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; }
+.mt-bpm { display: flex; align-items: center; gap: 6px; }
+.mt-bpm label { display: flex; align-items: baseline; gap: 6px; }
+.mt-bpm input[type=number] { width: 96px; height: 50px; font: 600 32px/1 var(--serif); text-align: center; font-variant-numeric: tabular-nums; padding: 2px 4px; }
+.mt-bpm label span { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.mt-bpm .btn { width: 36px; height: 36px; justify-content: center; padding: 0; font-size: 19px; }
+.mt-name { display: flex; flex-direction: column; gap: 3px; min-width: 8.5em; }
+.mt-name span { font: italic 600 21px/1.1 var(--serif); color: var(--accent); }
+.mt-name small { font-size: 12px; color: var(--muted); }
+.mt-beats { display: flex; flex-wrap: wrap; gap: 7px; }
+.mt-beats button { width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid var(--line); background: transparent; color: var(--muted); font-weight: 600; font-size: 12.5px; padding: 0; display: grid; place-items: center; font-variant-numeric: tabular-nums; }
+.mt-beats button[data-l="2"] { border: 2.5px solid var(--accent); color: var(--accent); }
+.mt-beats button[data-l="0"] { border-style: dashed; opacity: .5; }
+.mt-beats button.now { background: var(--ink); color: var(--bg); border-color: var(--ink); opacity: 1; }
+.mt-beats button[data-l="2"].now { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.mt-beats button[data-l="0"].now { background: transparent; color: var(--ink); border-color: var(--ink); }
+.mt-slider { width: 100%; accent-color: var(--accent); }
+.mt-ctl, .mt-msg { grid-column: 1 / -1; }
+.btn.mt-go { min-width: 84px; justify-content: center; }
+.btn.mt-go.on { background: var(--rec); border-color: var(--rec); color: var(--rec-ink); }
+#mt-vol { width: 90px; accent-color: var(--accent); }
+.panel kbd { font: 600 11.5px/1 var(--ui); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 1px 5px; color: var(--ink); }
+@media (max-width: 560px) { .metro { gap: 10px 12px; } .mt-pend { width: 42px; height: 56px; } .mt-bpm input[type=number] { width: 84px; font-size: 28px; } }
 .earchoices { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .earscore { font-weight: 600; }
 
@@ -164,8 +198,13 @@ input[type=number] { width: 76px; }
 .help dt { font-weight: 600; color: var(--ink); }
 .help dd { margin: 0; }
 kbd { font: 600 12px var(--ui); background: var(--panel); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 0 5px; }
-.toast { position: fixed; left: 50%; bottom: max(18px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 9px 14px; border-radius: 8px; font-weight: 500; z-index: 80; max-width: 90vw; opacity: 0; pointer-events: none; transition: opacity .2s; }
+.toast { position: fixed; left: 50%; bottom: max(18px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 9px 14px; border-radius: 8px; font-weight: 500; z-index: 80; width: max-content; max-width: min(560px, 90vw); text-align: center; opacity: 0; pointer-events: none; transition: opacity .2s; }
 .toast.show { opacity: 1; }
+body.dropping::after {
+  content: "Drop a MusicXML, MIDI or Quaver file to import it"; position: fixed; inset: 10px; z-index: 90; pointer-events: none;
+  display: grid; place-items: center; padding: 20px; text-align: center; font: italic 600 22px/1.3 var(--serif); color: var(--accent);
+  background: color-mix(in srgb, var(--bg) 88%, transparent); border: 3px dashed var(--accent); border-radius: 16px;
+}
 body.isplaying { padding-bottom: 110px; }
 body.isplaying .toast { bottom: calc(max(16px, env(safe-area-inset-bottom, 0px)) + 72px); }
 
@@ -239,10 +278,11 @@ body.isplaying .toast { bottom: calc(max(16px, env(safe-area-inset-bottom, 0px))
       <button class="btn" id="redo" title="Redo (Ctrl/Cmd+Shift+Z)">Redo</button>
       <details class="menu" id="newmenu"><summary class="btn">New ▾</summary><div class="menu-list left" id="templatelist"></div></details>
       <button class="btn compose" id="composebtn" title="Write a brand-new original piece">✨ Compose</button>
-      <button class="btn" id="importbtn" title="Import MIDI, MusicXML or a Quaver file">Import</button>
+      <button class="btn" id="importbtn" title="Import MusicXML (.musicxml, .xml, .mxl), MIDI (.mid) or a Quaver score file (.json). You can also drop a file anywhere on the page.">Import</button>
       <button class="btn rec" id="micbtn" aria-pressed="false" title="Sing or play into your microphone"><span class="dot"></span>Mic</button>
       <button class="btn" id="practicebtn" aria-pressed="false" title="Play along and get graded">Practice</button>
       <button class="btn" id="earbtn" aria-pressed="false" title="Train your ear">Ear training</button>
+      <button class="btn" id="metrobtn" aria-pressed="false" title="Metronome (M)"><span class="mtled" id="mtled" aria-hidden="true"></span>Metronome</button>
       <button class="btn" id="sonnetbtn" aria-pressed="false" title="Ask Sonnet to research, suggest or write music">✦ Sonnet</button>
       <button class="btn primary" id="play" title="Play (Space)"><svg viewBox="0 0 24 24" fill="currentColor" id="playicon"><path d="M7 4.5v15l12-7.5z"/></svg><span id="playlabel">Play</span></button>
       <button class="btn" id="loopbtn" aria-pressed="false" title="Loop the selected bars, or the whole piece">⟲ Loop</button>
@@ -267,7 +307,7 @@ body.isplaying .toast { bottom: calc(max(16px, env(safe-area-inset-bottom, 0px))
           <button data-act="printall">Print / PDF (score + every part)<small>One set of pages per player</small></button>
         </div>
       </details>
-      <input type="file" id="fileinput" accept=".json,.mid,.midi,.xml,.musicxml,.mxl,application/json,audio/midi" hidden>
+      <input type="file" id="fileinput" hidden>
     </div>
   </header>
 
@@ -400,6 +440,44 @@ body.isplaying .toast { bottom: calc(max(16px, env(safe-area-inset-bottom, 0px))
     <div class="earchoices" id="earchoices"></div>
   </section>
 
+  <section class="panel" id="metropanel" hidden>
+    <h3>Metronome</h3>
+    <div class="metro">
+      <svg class="mt-pend" viewBox="0 0 64 84" aria-hidden="true">
+        <path class="mt-case" d="M21 5h22l15 74H6z"/>
+        <path class="mt-scale" d="M32 14v46M27 20h10M28.5 28h7M28.5 36h7M28.5 44h7M28.5 52h7"/>
+        <g id="mt-arm"><line x1="32" y1="70" x2="32" y2="9"/><rect x="26.5" y="24" width="11" height="8" rx="2"/></g>
+        <circle class="mt-pivot" cx="32" cy="70" r="3"/>
+      </svg>
+      <div class="mt-main">
+        <div class="mt-head">
+          <div class="mt-bpm">
+            <button class="btn" id="mt-down" type="button" title="Slower" aria-label="Slower">−</button>
+            <label><input type="number" id="mt-bpm" min="20" max="300" step="1" value="100" aria-label="Beats per minute"><span>BPM</span></label>
+            <button class="btn" id="mt-up" type="button" title="Faster" aria-label="Faster">+</button>
+          </div>
+          <div class="mt-name" id="mt-name"><span>Andante</span><small>at a walking pace</small></div>
+          <div class="mt-beats" id="mt-beats" role="group" aria-label="Beats in each bar. Click one to change it."></div>
+        </div>
+        <input type="range" class="mt-slider" id="mt-slider" min="20" max="300" step="1" value="100" aria-label="Tempo">
+      </div>
+      <div class="microw mt-ctl">
+        <button class="btn primary mt-go" id="mt-go" type="button">Start</button>
+        <button class="btn" id="mt-tap" type="button" title="Tap at the speed you want, 4 times or more">Tap tempo</button>
+        <label>Beats <select id="mt-count" aria-label="Beats in each bar"></select></label>
+        <label>Subdivide <select id="mt-sub"><option value="1">Off</option><option value="2">Eighths</option><option value="3">Triplets</option><option value="4">Sixteenths</option></select></label>
+        <label>Sound <select id="mt-sound"><option value="click">Click</option><option value="wood">Wood block</option><option value="beep">Beep</option></select></label>
+        <label>Volume <input type="range" id="mt-vol" min="0" max="1" step="0.05" value="0.8"></label>
+      </div>
+      <div class="microw mt-ctl">
+        <button class="btn sm" id="mt-from" type="button" title="Match the tempo and time signature of the selected bar (or bar 1)">Use the score’s tempo</button>
+        <button class="btn sm" id="mt-to" type="button" title="Set the score's starting tempo to this one">Write this tempo into the score</button>
+        <label><input type="checkbox" id="mt-play"> Also click when I press Play</label>
+      </div>
+      <p class="mt-msg" id="mt-msg">Click a beat to change it: accented, normal, then silent. Press <kbd>M</kbd> to start or stop.</p>
+    </div>
+  </section>
+
   <main class="paper">
     <div class="head">
       <input id="title" aria-label="Title" placeholder="Untitled piece" spellcheck="false">
@@ -421,7 +499,8 @@ body.isplaying .toast { bottom: calc(max(16px, env(safe-area-inset-bottom, 0px))
       <dt><kbd>L</kbd> / <kbd>K</kbd></dt><dd>Type lyrics / chord symbols for the selected note. Space or Enter moves to the next note.</dd>
       <dt><kbd>S</kbd></dt><dd>Slur the selected notes.</dd>
       <dt><kbd>Space</kbd></dt><dd>Play or stop from the selected note. Turn on Loop to repeat the selected bars.</dd>
-      <dt><kbd>Esc</kbd></dt><dd>Stop the music, even while you're typing in a box. The red Stop button at the bottom of the screen also stays visible while music plays.</dd>
+      <dt><kbd>M</kbd></dt><dd>Start or stop the metronome. Click a beat to accent or silence it, and use Tap tempo to set the speed by tapping.</dd>
+      <dt><kbd>Esc</kbd></dt><dd>Stop the music or the metronome, even while you're typing in a box. The red Stop button at the bottom of the screen also stays visible while music plays.</dd>
     </dl>
   </details>
 </div>
@@ -451,13 +530,14 @@ body.isplaying .toast { bottom: calc(max(16px, env(safe-area-inset-bottom, 0px))
 </div>
 <div class="toast" id="toast" role="status"></div>
 
-<script src="js/theory.js?v=6"></script>
-<script src="js/render.js?v=6"></script>
-<script src="js/audio.js?v=6"></script>
-<script src="js/io.js?v=6"></script>
-<script src="js/extras.js?v=6"></script>
-<script src="js/composer.js?v=6"></script>
-<script src="js/video.js?v=6"></script>
-<script src="js/app.js?v=6"></script>
+<script src="js/theory.js?v=8"></script>
+<script src="js/render.js?v=8"></script>
+<script src="js/audio.js?v=8"></script>
+<script src="js/io.js?v=8"></script>
+<script src="js/extras.js?v=8"></script>
+<script src="js/metronome.js?v=8"></script>
+<script src="js/composer.js?v=8"></script>
+<script src="js/video.js?v=8"></script>
+<script src="js/app.js?v=8"></script>
 </body>
 </html>

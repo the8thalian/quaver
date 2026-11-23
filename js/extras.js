@@ -57,6 +57,7 @@ async function micStart() {
   if (isKit(ap)) { micMsg('The mic writes melodies. Select a pitched part (not drums) first, then press Record.'); return; }
   const stream = await openMic(micMsg); if (!stream) return;
   if (playing) stopPlay();
+  metroStop();
   const a = ctx(), src = a.createMediaStreamSource(stream), an = a.createAnalyser(); an.fftSize = 2048; src.connect(an);
   const pos = totalBeats(NT()), k0 = barAt(pos + 0.001), spb = 60 / tempoOf(k0), cap = capOf(k0), count = $('mic-count').checked ? cap : 0;
   Object.assign(mic, { on: true, stream, src, an, buf: new Float32Array(an.fftSize), frames: [], spb, cap, t0: a.currentTime + 0.2 + count * spb, nextBeat: -count, part: ap });
@@ -129,6 +130,7 @@ async function practiceStart() {
   if (!NT().some((n) => n.type === 'note')) { prMsg('This part has no notes to practise yet.'); return; }
   const stream = await openMic(prMsg); if (!stream) return;
   if (playing) stopPlay();
+  metroStop();
   practiceMarks = {}; render();
   const a = ctx(), src = a.createMediaStreamSource(stream), an = a.createAnalyser(); an.fftSize = 2048; src.connect(an);
   const p = ap, range = selRange(), plan = buildPlan(), full = playOrder(plan.nBars);

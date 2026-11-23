@@ -8,6 +8,7 @@ A sheet music maker that runs in your browser: **https://the8thalian.github.io/q
 - ✨ Compose writes an original piece in the style you pick
 - Sing or play into the mic, or upload a recording, and it becomes notation
 - Practice mode listens while you play along and marks each note right or wrong
+- A metronome with tap tempo, beats you can accent or silence, subdivisions and three click sounds
 - Ask Sonnet (with your own Anthropic API key) for dynamics, harmonies, bass lines and arrangements
 - Import MIDI and MusicXML; save as MIDI, MusicXML, WAV, MP4 video, PNG or PDF
 
@@ -24,6 +25,6 @@ Then go to http://localhost:5173. (The microphone needs `localhost` or `https`.)
 ## Files
 
 - `index.html`: the page and its styles
-- `js/`: theory and instruments, notation drawing, sound, import/export, mic and Sonnet, the composer, video export, and the editor
+- `js/`: theory and instruments, notation drawing, sound, import/export, mic and Sonnet, the metronome, the composer, video export, and the editor
 - `fonts/embed.css`: the fonts built into PNG and video exports
 - `tools/build_publish.py`: builds the copy published on claude.ai
