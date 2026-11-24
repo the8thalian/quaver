@@ -51,21 +51,25 @@ const fileBase = () => (S.title || 'score').trim().replace(/[^\w\-]+/g, '_').rep
 const xesc = (s) => String(s).replace(/[<&>"']/g, (c) => ({ '<': '&lt;', '&': '&amp;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]));
 
 /* ---------- instrument guessing for imports ---------- */
+/* part names → instruments, in English and the usual Italian, German, French and Spanish spellings (scores often keep them),
+   instruments before voice types, so "Sassofono contralto" is an alto sax and not a contralto singer */
+const SAX = '(?:sax|sass|saks)';
 const NAME_RULES = [
-  [/drum|kit\b|percussion|snare|cymbal/, 'drums'], [/conga|bongo|tambourine|shaker|cowbell|woodblock|claves|triangle/, 'handperc'],
-  [/timpani|timp\b/, 'timpani'], [/xylo/, 'xylophone'], [/glock/, 'glockenspiel'], [/vibra/, 'vibraphone'], [/tubular|chimes/, 'tubularbells'], [/steel/, 'steeldrum'], [/marimba|mallet/, 'marimba'],
-  [/bari(tone)?\.? ?sax/, 'barisax'], [/tenor\.? ?sax/, 'tenorsax'], [/sax/, 'altosax'],
-  [/bass ?clar|b\. ?cl/, 'bassclarinet'], [/clar/, 'clarinet'], [/oboe|english horn|cor anglais/, 'oboe'], [/bassoon/, 'bassoon'], [/picc/, 'piccolo'], [/flut|recorder/, 'flute'],
-  [/trombone/, 'trombone'], [/tuba|sousaphone/, 'tuba'], [/trump|cornet|flugel/, 'trumpet'], [/horn/, 'horn'],
-  [/contrabass|double bass|string bass|upright/, 'doublebass'], [/viola/, 'viola'], [/cello/, 'cello'], [/vio|fiddle/, 'violin'], [/strings|string ens/, 'strings'],
-  [/electric guitar|el\. ?gtr|e\. ?gtr|e-?guitar|distortion|overdrive|(lead|rhythm) gu?i?ta?r|strat|telecaster|les paul/, 'eguitar'],
-  [/synth.*bass/, 'synthbass'], [/acoustic bass|ac\. ?bass/, 'bass'], [/bass guitar|electric bass|e\. ?bass|el\. ?bass|fretless|slap bass|^bass$/, 'ebass'], [/\bpad\b/, 'synthpad'], [/synth|^lead$/, 'synthlead'],
-  [/harpsi/, 'harpsichord'], [/celesta/, 'celesta'], [/rhodes|e\.? ?piano|electric piano/, 'epiano'], [/pian|keyb/, 'piano'], [/accord/, 'accordion'], [/organ/, 'organ'],
-  [/harp/, 'harp'], [/guit|banjo|mandolin|ukulele|\blute/, 'guitar'],
-  [/choir|chorus|satb/, 'choir'], [/tenor/, 'tenorvoice'], [/\bbass\b|baritone/, 'bassvoice'], [/voice|vocal|sopran|alto|mezzo|sing|melody/, 'voice']
+  [/drum|kit\b|percussion|snare|cymbal|batteria|schlagzeug|batterie/, 'drums'], [/conga|bongo|tambourine|shaker|cowbell|woodblock|claves|triangle/, 'handperc'],
+  [/timpani|timp\b|pauke|timbales\b/, 'timpani'], [/xylo|silofono/, 'xylophone'], [/glock/, 'glockenspiel'], [/vibra/, 'vibraphone'], [/tubular|chimes|campane/, 'tubularbells'], [/steel/, 'steeldrum'], [/marimba|mallet/, 'marimba'],
+  [new RegExp(`bar[iy]\\S*\\.? ?${SAX}|${SAX}\\S*\\.? ?bar[iy]`), 'barisax'], [new RegExp(`tenor\\S*\\.? ?${SAX}|${SAX}\\S*\\.? ?ten`), 'tenorsax'], [new RegExp(SAX), 'altosax'],
+  [/bass ?clar|b\. ?cl|clarinetto basso|bassklarinette|clarinette basse|clarinete bajo/, 'bassclarinet'], [/clar|klarin/, 'clarinet'], [/oboe|hautbois|english horn|cor anglais|corno inglese|englischhorn/, 'oboe'],
+  [/bassoon|fagott?o?|basson|fagot/, 'bassoon'], [/picc|ottavino/, 'piccolo'], [/fl[uûö]t|flaut|recorder|blockfl/, 'flute'],
+  [/trombone|posaune|tromb[oó]n/, 'trombone'], [/tuba|sousaphone/, 'tuba'], [/trump|cornet|flugel|tromba|trompet/, 'trumpet'], [/horn|corno|\bcor\b|trompa/, 'horn'],
+  [/contrabass|contrabb|kontrabass|contrebasse|contrabajo|double bass|string bass|upright/, 'doublebass'], [/viola|bratsche|\balto\b.*(?:viol|string)/, 'viola'], [/cello|violoncell/, 'cello'], [/vio|fiddle|geige/, 'violin'], [/strings|string ens|archi\b|streicher/, 'strings'],
+  [/electric guitar|el\. ?gtr|e\. ?gtr|e-?guitar|distortion|overdrive|(lead|rhythm) gu?i?ta?r|strat|telecaster|les paul|chitarra elettrica|e-?gitarre|guitare [eé]lectrique/, 'eguitar'],
+  [/synth.*bass/, 'synthbass'], [/acoustic bass|ac\. ?bass/, 'bass'], [/bass guitar|electric bass|e\. ?bass|el\. ?bass|fretless|slap bass|^bass$|basso elettrico|e-?bass/, 'ebass'], [/\bpad\b/, 'synthpad'], [/synth|^lead$/, 'synthlead'],
+  [/harpsi|clavicembalo|cembalo|clavecin/, 'harpsichord'], [/celesta/, 'celesta'], [/rhodes|e\.? ?piano|electric piano/, 'epiano'], [/pian|keyb|klavier/, 'piano'], [/accord|akkord|fisarmonica/, 'accordion'], [/organ|orgel|orgue/, 'organ'],
+  [/harp|arpa|harfe|harpe/, 'harp'], [/guit|chitar|gitar|banjo|mandolin|ukulele|\blute/, 'guitar'],
+  [/choir|chorus|satb|\bcoro\b|\bchor\b|ch[oœ]ur/, 'choir'], [/tenor/, 'tenorvoice'], [/\bbass\b|baritone|baritono|bariton/, 'bassvoice'], [/voice|vocal|sopran|alto|mezzo|sing|melody|voce|stimme|voix|canto/, 'voice']
 ];
 function instFromName(name, prog) {
-  const s = (name || '').toLowerCase().trim();
+  const s = (name || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim(); // "barítono" reads as "baritono"
   if (s) for (const [re, k] of NAME_RULES) if (re.test(s)) return k;
   if (typeof prog === 'number') {
     const exact = Object.keys(INSTR).find((k) => INSTR[k].prog === prog); if (exact) return exact;

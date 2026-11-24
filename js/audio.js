@@ -61,8 +61,16 @@ function env(g, t, dur, peak, att, endFrac, rel) {
   g.gain.linearRampToValueAtTime(0.0001, t + hold + rel);
   return t + hold + rel + 0.05;
 }
-function osc(a, type, f, t, end, dest, detune) { const o = a.createOscillator(); if (type instanceof PeriodicWave) o.setPeriodicWave(type); else o.type = type; o.frequency.value = f; if (detune) o.detune.value = detune; o.connect(dest); o.start(t); o.stop(end); voices.push(o); return o; }
-function vibrato(a, o, f, depth, rate, end) { const t = o._t || a.currentTime; const l = a.createOscillator(), lg = a.createGain(); l.frequency.value = rate; lg.gain.value = f * depth; l.connect(lg); lg.connect(o.frequency); l.start(); l.stop(end); voices.push(l); void t; }
+/* remembers a sound so Stop can silence it, and lets go of it once it has finished,
+   so a long piece doesn't keep thousands of spent notes wired into the mixer */
+function keep(n) { voices.push(n); n.onended = () => { n.done = true; try { n.disconnect(); } catch (e) {} }; return n; }
+function osc(a, type, f, t, end, dest, detune) { const o = a.createOscillator(); if (type instanceof PeriodicWave) o.setPeriodicWave(type); else o.type = type; o.frequency.value = f; if (detune) o.detune.value = detune; o.connect(dest); o.start(t); o.stop(end); o.startAt = t; keep(o); return o; }
+/* pitch wobble for one oscillator or several sharing it; it starts with the note (starting it at once,
+   for every note in the piece, is what made long scores stutter) */
+function vibrato(a, o, f, depth, rate, end) {
+  const os = Array.isArray(o) ? o : [o], l = a.createOscillator(), lg = a.createGain(); l.frequency.value = rate; lg.gain.value = f * depth;
+  l.connect(lg); os.forEach((x) => lg.connect(x.frequency)); l.start(os[0].startAt !== undefined ? os[0].startAt : a.currentTime); l.stop(end); keep(l);
+}
 function filt(a, type, f, q) { const b = a.createBiquadFilter(); b.type = type; b.frequency.value = f; if (q != null) b.Q.value = q; return b; }
 function gainTo(a, dest) { const g = a.createGain(); g.connect(dest || DEST); return g; }
 function struck(a, f, t, d, v, partials, ring, dest) {
@@ -72,25 +80,25 @@ function struck(a, f, t, d, v, partials, ring, dest) {
 function noiseHit(a, t, dec, v, type, freq, q) {
   const n = a.createBufferSource(), f = filt(a, type, freq, q), g = a.createGain(); n.buffer = noise();
   g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0005, t + dec);
-  n.connect(f); f.connect(g); g.connect(DEST); n.start(t); n.stop(t + dec + 0.02); voices.push(n);
+  n.connect(f); f.connect(g); g.connect(DEST); n.start(t); n.stop(t + dec + 0.02); keep(n);
 }
 function sweep(a, t, f0, f1, sw, dec, v, type = 'sine') {
   const o = a.createOscillator(), g = a.createGain(); o.type = type;
   o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + sw);
   g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0005, t + dec);
-  o.connect(g); g.connect(DEST); o.start(t); o.stop(t + dec + 0.02); voices.push(o);
+  o.connect(g); g.connect(DEST); o.start(t); o.stop(t + dec + 0.02); keep(o);
 }
-function breath(a, t, end, f, v, dest) { const n = a.createBufferSource(), bp = filt(a, 'bandpass', f, 1.5), g = a.createGain(); n.buffer = noise(); n.loop = true; g.gain.value = v; n.connect(bp); bp.connect(g); g.connect(dest); n.start(t); n.stop(end); voices.push(n); }
+function breath(a, t, end, f, v, dest) { const n = a.createBufferSource(), bp = filt(a, 'bandpass', f, 1.5), g = a.createGain(); n.buffer = noise(); n.loop = true; g.gain.value = v; n.connect(bp); bp.connect(g); g.connect(dest); n.start(t); n.stop(end); keep(n); }
 function bowed(a, f, t, d, v, att, vibRate, bright) {
   const g = gainTo(a), lp = filt(a, 'lowpass', Math.min(5000, f * (4 + 5 * bright)), 0.8); lp.connect(g);
   const end = env(g, t, d, v * 0.55, att, 0.85, 0.12);
-  const o1 = osc(a, 'sawtooth', f, t, end, lp), o2 = osc(a, 'sawtooth', f, t, end, lp, 7); vibrato(a, o1, f, 0.005, vibRate, end); vibrato(a, o2, f, 0.005, vibRate, end);
+  const o1 = osc(a, 'sawtooth', f, t, end, lp), o2 = osc(a, 'sawtooth', f, t, end, lp, 7); vibrato(a, [o1, o2], f, 0.005, vibRate, end);
 }
 function sax(a, f, t, d, v, formant, bright) {
   const g = gainTo(a), pk = filt(a, 'peaking', formant, 2), lp = filt(a, 'lowpass', Math.min(7000, f * bright), 1.2); pk.gain.value = 9; pk.connect(lp); lp.connect(g);
   const end = env(g, t, d, v * 0.45, 0.035, 0.88, 0.08), sq = a.createGain(); sq.gain.value = 0.35; sq.connect(pk);
   const o1 = osc(a, 'sawtooth', f, t, end, pk), o2 = osc(a, 'square', f, t, end, sq, 4);
-  vibrato(a, o1, f, 0.006, 5.2, end); vibrato(a, o2, f, 0.006, 5.2, end); breath(a, t, end, formant * 1.6, v * 0.05, g);
+  vibrato(a, [o1, o2], f, 0.006, 5.2, end); breath(a, t, end, formant * 1.6, v * 0.05, g);
 }
 function brass(a, f, t, d, v, att, c0, c1) {
   const g = gainTo(a), lp = filt(a, 'lowpass', f * c0, 1.5);
@@ -110,7 +118,7 @@ function driveCurve(k) {   // soft clipping, like a slightly overdriven amp
 function pluck(a, key, f, t, d, v, decay, bright, endFrac, rel, lpf) {
   const s = a.createBufferSource(); s.buffer = ksBuffer(key, f, decay, bright); const g = gainTo(a);
   if (lpf) { const lp = filt(a, 'lowpass', lpf); s.connect(lp); lp.connect(g); } else s.connect(g);
-  const end = env(g, t, d, v, 0.002, endFrac, rel); s.start(t); s.stop(end); voices.push(s);
+  const end = env(g, t, d, v, 0.002, endFrac, rel); s.start(t); s.stop(end); keep(s);
 }
 const SYN = {
   piano(a, f, t, d, v, midi) {
@@ -120,7 +128,7 @@ const SYN = {
   },
   epiano(a, f, t, d, v) {
     const g = gainTo(a), end = env(g, t, d, v, 0.003, Math.exp(-d / 1.6), 0.2), car = osc(a, 'sine', f, t, end, g), m = a.createOscillator(), mg = a.createGain();
-    m.frequency.value = f; mg.gain.setValueAtTime(f * 2.2, t); mg.gain.exponentialRampToValueAtTime(f * 0.15, t + 0.4); m.connect(mg); mg.connect(car.frequency); m.start(t); m.stop(end); voices.push(m);
+    m.frequency.value = f; mg.gain.setValueAtTime(f * 2.2, t); mg.gain.exponentialRampToValueAtTime(f * 0.15, t + 0.4); m.connect(mg); mg.connect(car.frequency); m.start(t); m.stop(end); keep(m);
   },
   harpsichord(a, f, t, d, v, midi) { pluck(a, 'hc' + midi, f, t, d, v * 0.9, 0.995, 0.95, 0.45, 0.06); },
   organ(a, f, t, d, v) { const g = gainTo(a), end = env(g, t, d, v * 0.9, 0.015, 1, 0.07); osc(a, wave('organ', [0, 1, 0.7, 0.45, 0.35, 0.2, 0.1, 0.05, 0.1]), f, t, end, g); osc(a, 'sine', f * 0.5, t, end, g); },
@@ -138,7 +146,7 @@ const SYN = {
     const hp = filt(a, 'highpass', 110, 0.7), pk = filt(a, 'peaking', 2400, 1.2), ws = a.createWaveShaper(), lp = filt(a, 'lowpass', 5200, 0.8), g = gainTo(a);
     pk.gain.value = 5; ws.curve = driveCurve(2.4); ws.oversample = '2x';
     s.connect(hp); hp.connect(pk); pk.connect(ws); ws.connect(lp); lp.connect(g);
-    const end = env(g, t, d, v * 0.85, 0.003, 0.6, 0.12); s.start(t); s.stop(end); voices.push(s);
+    const end = env(g, t, d, v * 0.85, 0.003, 0.6, 0.12); s.start(t); s.stop(end); keep(s);
   },
   harp(a, f, t, d, v, midi) { pluck(a, 'h' + midi, f, t, Math.max(d, 0.9), v * 1.1, 0.9985, 0.35, 0.5, 0.5); },
   bass(a, f, t, d, v, midi) { pluck(a, 'b' + midi, f, t, d, v * 1.6, 0.997, 0.25, 0.4, 0.1, 900); },
@@ -148,7 +156,7 @@ const SYN = {
     const hp = filt(a, 'highpass', 38, 0.7), pk = filt(a, 'peaking', 750, 1.4), ws = a.createWaveShaper(), lp = filt(a, 'lowpass', 2600, 0.9), g = gainTo(a);
     pk.gain.value = 6; ws.curve = driveCurve(1.6); ws.oversample = '2x';
     s.connect(hp); hp.connect(pk); pk.connect(ws); ws.connect(lp); lp.connect(g);
-    const end = env(g, t, d, v * 1.5, 0.004, 0.55, 0.09); s.start(t); s.stop(end); voices.push(s);
+    const end = env(g, t, d, v * 1.5, 0.004, 0.55, 0.09); s.start(t); s.stop(end); keep(s);
     const sg = gainTo(a); env(sg, t, d, v * 0.5, 0.006, 0.5, 0.09); osc(a, 'sine', f, t, end, sg);
   },
   flute(a, f, t, d, v) { const g = gainTo(a), end = env(g, t, d, v * 0.9, 0.07, 0.9, 0.09); const o = osc(a, wave('flute', [0, 1, 0.22, 0.08, 0.03]), f, t, end, g); vibrato(a, o, f, 0.004, 5, end); breath(a, t, end, f * 2.5, v * 0.12, g); },
@@ -171,7 +179,7 @@ const SYN = {
   glockenspiel(a, f, t, d, v) { struck(a, f, t, d, v, [[1, 1, 1.4], [2.76, 0.3, 0.5], [5.4, 0.12, 0.25]], 1.2); },
   vibraphone(a, f, t, d, v) {
     const tg = gainTo(a), l = a.createOscillator(), lg = a.createGain(); tg.gain.value = 0.7; lg.gain.value = 0.3; l.frequency.value = 5.5;
-    l.connect(lg); lg.connect(tg.gain); l.start(t); l.stop(t + Math.max(d, 1.5) + 0.3); voices.push(l);
+    l.connect(lg); lg.connect(tg.gain); l.start(t); l.stop(t + Math.max(d, 1.5) + 0.3); keep(l);
     struck(a, f, t, d, v, [[1, 1, 2.5], [4, 0.15, 0.6]], 1.5, tg);
   },
   tubularbells(a, f, t, d, v) { struck(a, f, t, d, v * 0.8, [[0.5, 0.3, 2], [1, 1, 3], [1.19, 0.4, 2], [1.56, 0.35, 1.5], [2, 0.5, 1.5], [2.5, 0.25, 1], [3, 0.2, 0.8]], 2.5); },
@@ -251,7 +259,7 @@ function sampleTone(inst, midi, t, d, v) {
   const buf = sfBufs[INSTR[inst].sf + ':' + midi]; if (!buf) return false;
   const a = ctx(), s = a.createBufferSource(), g = gainTo(a); s.buffer = buf; s.connect(g);
   g.gain.setValueAtTime(v * 1.3, t); g.gain.setValueAtTime(v * 1.3, t + d); g.gain.linearRampToValueAtTime(0.0001, t + d + 0.25);
-  s.start(t); s.stop(t + d + 0.3); voices.push(s); return true;
+  s.start(t); s.stop(t + d + 0.3); keep(s); return true;
 }
 
 function tone(inst, midi, t, dur, vel, dest) {
@@ -261,7 +269,7 @@ function tone(inst, midi, t, dur, vel, dest) {
   const f = 440 * Math.pow(2, (midi - 69) / 12);
   (SYN[I.syn || inst] || SYN.piano)(a, f, t, Math.max(0.06, dur), vel * I.gain, midi);
 }
-function clickAt(t, accent) { const a = ctx(), o = a.createOscillator(), g = a.createGain(); o.frequency.value = accent ? 1500 : 1000; g.gain.setValueAtTime(0.22, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.04); o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + 0.05); voices.push(o); }
+function clickAt(t, accent) { const a = ctx(), o = a.createOscillator(), g = a.createGain(); o.frequency.value = accent ? 1500 : 1000; g.gain.setValueAtTime(0.22, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.04); o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + 0.05); keep(o); }
 
 /* ---------- playback plan ---------- */
 function levels(notes) {
@@ -314,19 +322,23 @@ function beatToSec(k, b, plan) {
   let extra = 0; const fm = plan.ferm[k]; if (fm) for (const at in fm) if (+at <= b + 1e-6) extra += fm[at];
   return (sb + extra) * spb;
 }
-/* schedules bars [order[startIdx] …] from time t0; returns the end time and every note event */
+/* Schedules bars [order[startIdx] …] from time t0; returns the end time and every note event.
+   Sounds are built only a few seconds before they play (live: a timer; offline: render pauses, see
+   renderWAV). Building a whole long piece up front wired tens of thousands of nodes into the mixer
+   at once, more than the audio thread could work through in real time, so playback stuttered. */
+const AHEAD = 2.5;
 function scheduleRun(o) {
   const a = ctx(), plan = buildPlan(), order = o.order || playOrder(plan.nBars), start = o.startIdx || 0;
   const solos = S.parts.some((p) => p.solo), events = [];
   const active = new Set(S.parts.map((p, i) => i).filter((i) => (solos ? S.parts[i].solo : !S.parts[i].mute) && i !== o.silentPart));
   const buses = S.parts.map((part) => { const g = a.createGain(); g.gain.value = part.vol; if (a.createStereoPanner) { const pn = a.createStereoPanner(); pn.pan.value = part.pan; g.connect(pn); pn.connect(master); } else g.connect(master); return g; });
-  let T = o.t0; const barTimes = [];
-  if (o.countIn) { const k0 = order[start] || 0, spb = 60 / tempoOf(k0), u = beatUnitOf(k0); for (let b = 0; b < capOf(k0) - EPS; b += u) clickAt(T + b * spb, b < EPS); T += capOf(k0) * spb; }
+  let T = o.t0; const barTimes = [], jobs = [], at = (t, fn) => jobs.push({ T: t, fn });
+  if (o.countIn) { const k0 = order[start] || 0, spb = 60 / tempoOf(k0), u = beatUnitOf(k0); for (let b = 0; b < capOf(k0) - EPS; b += u) { const tc = T + b * spb, acc = b < EPS; at(tc, () => clickAt(tc, acc)); } T += capOf(k0) * spb; }
   const skip = new Set();
   for (let oi = start; oi < order.length; oi++) {
     const k = order[oi], sb = oi === start ? (o.startBeat || 0) : 0, base = T - beatToSec(k, sb, plan), spb = 60 / tempoOf(k);
     barTimes.push({ k, T });
-    if (o.click) { const u = beatUnitOf(k); for (let b = 0; b < capOf(k) - EPS; b += u) if (b >= sb - EPS) clickAt(base + beatToSec(k, b, plan), b < EPS); }
+    if (o.click) { const u = beatUnitOf(k); for (let b = 0; b < capOf(k) - EPS; b += u) if (b >= sb - EPS) { const tc = base + beatToSec(k, b, plan), acc = b < EPS; at(tc, () => clickAt(tc, acc)); } }
     S.parts.forEach((part, p) => {
       const evs = plan.parts[p].byBar[k]; if (!evs) return;
       evs.forEach((e) => {
@@ -338,16 +350,28 @@ function scheduleRun(o) {
         const T1 = base + beatToSec(k, e.on, plan), T2 = base + beatToSec(k, Math.min(endB, capOf(k)), plan) + Math.max(0, endB - capOf(k)) * spb + extra;
         const kL = keyOf(k), ev = { p, i: e.i, bar: k, T: T1, T2, midis: soundsOf(p, n), vel: plan.parts[p].lev[e.i] * (n.art === 'acc' ? 1.35 : 1), art: n.art, legato: plan.parts[p].legato.has(e.i), kL };
         events.push(ev);
-        if (active.has(p)) playEvent(ev, part.inst, buses[p], isKit(p), n);
-        if (!o.offline && o.highlight !== false) {
+        if (active.has(p)) { const inst = part.inst, bus = buses[p], kit = isKit(p); at(T1, () => playEvent(ev, inst, bus, kit, n)); }
+        if (!o.offline && o.highlight !== false) at(T1, () => {
           timers.push(setTimeout(() => { const el = svg.querySelector(`[data-k="${key}"]`); if (el) { el.classList.add('pl'); const r = el.getBoundingClientRect(); if (r.bottom > innerHeight || r.top < 0) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } }, Math.max(0, (T1 - a.currentTime) * 1000)));
           timers.push(setTimeout(() => { const el = svg.querySelector(`[data-k="${key}"]`); if (el) el.classList.remove('pl'); }, Math.max(0, (T2 - a.currentTime) * 1000)));
-        }
+        });
       });
     });
     T = base + beatToSec(k, capOf(k), plan);
   }
-  return { t0: o.t0, endT: T, events, order, barTimes, nBars: plan.nBars };
+  jobs.sort((x, y) => x.T - y.T);
+  let ji = 0;
+  const feed = (upTo) => { while (ji < jobs.length && jobs[ji].T < upTo) jobs[ji++].fn(); };
+  if (!o.offline) {
+    // a background tab's timers can run as rarely as once a second, so look further ahead there
+    const pump = () => {
+      feed(a.currentTime + (document.hidden ? 6 : AHEAD));
+      if (voices.length > 3000) voices = voices.filter((v) => !v.done);
+      if (ji < jobs.length) timers.push(setTimeout(pump, 250));
+    };
+    pump();
+  }
+  return { t0: o.t0, endT: T, events, order, barTimes, nBars: plan.nBars, feed };
 }
 function playEvent(ev, inst, bus, kit, n) {
   let d = ev.T2 - ev.T;
@@ -455,10 +479,19 @@ async function renderWAV(sr = 44100, withEvents = false) {
   const plan = buildPlan(), order = playOrder(plan.nBars);
   const total = order.reduce((s, k) => s + beatToSec(k, capOf(k), plan), 0) + 3;
   const off = new OfflineAudioContext(2, Math.ceil(total * sr), sr);
-  const saved = { audio, master, waves }; let run;
-  audio = off; master = makeMaster(off); waves = {};
-  try { run = scheduleRun({ t0: 0.05, order, offline: true }); }
-  finally { audio = saved.audio; master = saved.master; waves = saved.waves; voices = []; }
+  // the sound code builds on the global context; point it at the offline one while it works, then put everything back
+  const mine = { audio: off, master: makeMaster(off), waves: {}, voices: [] };
+  const inOffline = (fn) => {
+    const live = { audio, master, waves, voices }; ({ audio, master, waves, voices } = mine);
+    try { return fn(); } finally { Object.assign(mine, { waves, voices: voices.filter((v) => !v.done) }); ({ audio, master, waves, voices } = live); }
+  };
+  const STEP = 2, run = inOffline(() => { const r = scheduleRun({ t0: 0.05, order, offline: true }); r.feed(STEP + AHEAD); return r; });
+  // pause the render every couple of seconds to build the next stretch of notes, as live playback does
+  if (typeof off.suspend !== 'function') inOffline(() => run.feed(Infinity)); // older browsers: build it all at once
+  else for (let t = STEP; t < total - 0.05; t += STEP) {
+    const at = t;
+    off.suspend(at).then(() => { try { inOffline(() => run.feed(at + STEP + AHEAD)); } finally { off.resume(); } });
+  }
   const buffer = await off.startRendering();
   return withEvents ? { buffer, events: run.events, endT: run.endT } : buffer;
 }
