@@ -438,7 +438,7 @@ function buildToolbar() {
       const sc = await importFile(f);
       if (isBusy()) stopAny();
       mutate(() => { S = sc; ap = 0; view = 'score'; sel = selA = -1; }); syncMeta();
-      toast(`Imported “${f.name}”: ${sc.parts.length} part${sc.parts.length > 1 ? 's' : ''}, ${playBars()} bars. Undo brings your old score back.`);
+      toast(`Imported “${f.name}”: ${sc.parts.length} part${sc.parts.length > 1 ? 's' : ''}, ${playBars()} bars.` + (sc.concert ? '' : ' Parts show what the players read; press Concert pitch for the sounding notes.') + ' Undo brings your old score back.');
     } catch (err) { toast((err && err.message) || 'Couldn’t import that file.'); }
   };
   $('importbtn').onclick = () => $('fileinput').click();

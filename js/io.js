@@ -216,7 +216,7 @@ function xmlToScore(text) {
   if (!doc.querySelector('score-partwise')) throw new Error('Only “partwise” MusicXML is supported');
   const tx = (el, q) => { const e = el.querySelector(q); return e ? e.textContent.trim() : ''; };
   const names = {}; doc.querySelectorAll('part-list > score-part').forEach((sp) => { names[sp.getAttribute('id')] = { name: tx(sp, 'part-name'), prog: tx(sp, 'midi-program') ? +tx(sp, 'midi-program') - 1 : null }; });
-  let key0 = null, ts0 = null, tempo0 = 0; const bars = {}; const parts = [];
+  let key0 = null, ts0 = null, tempo0 = 0, anyTrans = false; const bars = {}; const parts = [];
   const bar = (k) => (bars[k] = bars[k] || {});
   doc.querySelectorAll('score-partwise > part').forEach((partEl, pi) => {
     const info = names[partEl.getAttribute('id')] || { name: '' };
@@ -229,7 +229,7 @@ function xmlToScore(text) {
         if (tag === 'attributes') {
           if (el.querySelector('divisions')) div = +tx(el, 'divisions') || div;
           if (el.querySelector('staves')) nStaves = Math.max(1, Math.min(4, +tx(el, 'staves') || 1));
-          if (el.querySelector('transpose')) trans = (+tx(el, 'transpose > chromatic') || 0) + 12 * (+tx(el, 'transpose > octave-change') || 0);
+          if (el.querySelector('transpose')) { trans = (+tx(el, 'transpose > chromatic') || 0) + 12 * (+tx(el, 'transpose > octave-change') || 0); if (trans) anyTrans = true; }
           if (el.querySelector('key > fifths')) {
             ckey = transKey(+tx(el, 'key > fifths') || 0, trans);
             if (pi === 0) { if (key0 === null) key0 = ckey; else if (ckey !== lastKey) bar(mi).key = ckey; }
@@ -322,7 +322,10 @@ function xmlToScore(text) {
   });
   if (!parts.length) throw new Error('No notes found in that MusicXML file');
   const creator = doc.querySelector('creator[type="composer"]');
-  return normalize({ title: tx(doc, 'work-title') || tx(doc, 'movement-title'), composer: creator ? creator.textContent.trim() : '', key: key0 || 0, ts: ts0 || [4, 4], tempo: tempo0 || 100, bars, parts });
+  // show it the way the file was written: a file of transposed parts (a bari sax in treble clef, say) opens with
+  // Concert pitch off; one saved as a concert-pitch score (MusicXML 4's <concert-score/>) opens with it on
+  const concert = !!doc.querySelector('concert-score') || !anyTrans;
+  return normalize({ title: tx(doc, 'work-title') || tx(doc, 'movement-title'), composer: creator ? creator.textContent.trim() : '', key: key0 || 0, ts: ts0 || [4, 4], tempo: tempo0 || 100, concert, bars, parts });
 }
 async function unzipMXL(buf) {
   const u8 = new Uint8Array(buf), dv = new DataView(buf); let e = u8.length - 22;
